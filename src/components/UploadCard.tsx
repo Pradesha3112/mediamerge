@@ -13,15 +13,16 @@ interface UploadCardProps {
   description: string;
   accept: string;
   file: File | null;
-  onUpload: (file: File) => void;
+  onUpload: (files: File | File[]) => void;
   onClear: () => void;
+  multiple?: boolean;
   metadata?: {
     duration?: number;
     size?: number;
   };
 }
 
-export function UploadCard({ type, title, description, accept, file, onUpload, onClear, metadata }: UploadCardProps) {
+export function UploadCard({ type, title, description, accept, file, onUpload, onClear, multiple = false, metadata }: UploadCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -39,18 +40,24 @@ export function UploadCard({ type, title, description, accept, file, onUpload, o
   }, [file]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      onUpload(e.target.files[0]);
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      if (filesArray.length > 0) {
+        onUpload(multiple ? filesArray : filesArray[0]);
+      }
     }
   };
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    if (e.dataTransfer.files?.[0]) {
-      onUpload(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files) {
+      const filesArray = Array.from(e.dataTransfer.files);
+      if (filesArray.length > 0) {
+        onUpload(multiple ? filesArray : filesArray[0]);
+      }
     }
-  }, [onUpload]);
+  }, [onUpload, multiple]);
 
   const Icon = type === 'image' ? ImageIcon : type === 'video' ? Video : Music;
 
@@ -67,7 +74,7 @@ export function UploadCard({ type, title, description, accept, file, onUpload, o
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
-        {!file ? (
+        {!file || (type === 'image' && multiple) ? (
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
@@ -83,10 +90,13 @@ export function UploadCard({ type, title, description, accept, file, onUpload, o
               ref={inputRef}
               onChange={handleFileChange}
               accept={accept}
+              multiple={multiple}
               className="hidden"
             />
             <Upload className="mb-4 text-muted-foreground group-hover:text-primary transition-colors" size={32} />
-            <p className="text-sm font-medium text-center">Drag & drop or click to upload</p>
+            <p className="text-sm font-medium text-center">
+              {multiple ? "Add assets" : "Drag & drop or click"}
+            </p>
             <p className="text-xs text-muted-foreground mt-1">{accept.split(',').join(', ')}</p>
           </div>
         ) : (

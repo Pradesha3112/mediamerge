@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UploadCard } from './UploadCard';
 import { CombinedOutput } from './CombinedOutput';
 import { AdvancedOptions, type Config } from './AdvancedOptions';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { Layers, Loader2, RotateCcw, Zap, Music, History, Trash2, Download, Clock, Image as ImageIcon } from 'lucide-react';
+import { Layers, Loader2, RotateCcw, Zap, Music, Clock, Trash2, Download, Image as ImageIcon } from 'lucide-react';
 import { loadImage, loadVideo, formatBytes, formatDuration } from '@/lib/media-utils';
 import { saveVideoEntry, getAllVideoEntries, deleteVideoEntry, type VideoHistoryEntry } from '@/lib/video-db';
 import { Toaster } from '@/components/ui/toaster';
@@ -18,6 +18,27 @@ import { cn } from '@/lib/utils';
 
 const INTRO_DURATION = 4; 
 const EXACT_FINAL_DURATION = 90; // Strictly 1:30
+
+function ImageThumbnail({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const url = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => {
+    return () => URL.revokeObjectURL(url);
+  }, [url]);
+
+  return (
+    <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 group bg-black/20">
+      <img src={url} className="w-full h-full object-cover" alt="Banner Thumb" />
+      <Button 
+        variant="destructive" 
+        size="icon" 
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity h-full w-full rounded-none" 
+        onClick={onRemove}
+      >
+        <Trash2 size={14} />
+      </Button>
+    </div>
+  );
+}
 
 export function MediaMergeApp() {
   const [images, setImages] = useState<File[]>([]);
@@ -55,16 +76,17 @@ export function MediaMergeApp() {
     setHistory(entries);
   };
 
-  const handleUpload = async (type: 'image' | 'video' | 'audio', file: File) => {
-    try {
-      if (type === 'image') setImages(prev => [...prev, file]);
-      if (type === 'video') setVideo(file);
-      if (type === 'audio') {
-        setAudios(prev => [...prev, file]);
-        toast({ title: "Audio Pool Updated", description: `${file.name} added.` });
-      }
-    } catch (e) {
-      toast({ variant: "destructive", title: "Upload Error", description: "Invalid file format." });
+  const handleUpload = (type: 'image' | 'video' | 'audio', input: File | File[]) => {
+    const files = Array.isArray(input) ? input : [input];
+    
+    if (type === 'image') {
+      setImages(prev => [...prev, ...files]);
+      toast({ title: "Banner Assets Added", description: `${files.length} image(s) added to pool.` });
+    }
+    if (type === 'video') setVideo(files[0]);
+    if (type === 'audio') {
+      setAudios(prev => [...prev, ...files]);
+      toast({ title: "Audio Pool Updated", description: `${files.length} track(s) added.` });
     }
   };
 
@@ -78,8 +100,7 @@ export function MediaMergeApp() {
     try {
       const audioFile = audios[Math.floor(Math.random() * audios.length)];
       
-      // Load all selected intro images
-      const loadedImages = await Promise.all(images.slice(0, 5).map(img => loadImage(img)));
+      const loadedImages = await Promise.all(images.slice(0, 10).map(img => loadImage(img)));
       const vidEl = await loadVideo(video);
       vidEl.playbackRate = config.playbackSpeed;
       
@@ -103,7 +124,7 @@ export function MediaMergeApp() {
       const audioDest = audioCtx.createMediaStreamDestination();
       const audioSource = audioCtx.createBufferSource();
       audioSource.buffer = decodedAudio;
-      audioSource.loop = true; // Auto-loop handled here for any audio < 90s
+      audioSource.loop = true; 
 
       const gainNode = audioCtx.createGain();
       gainNode.gain.value = config.audioVolume;
@@ -181,12 +202,14 @@ export function MediaMergeApp() {
         if (now < INTRO_DURATION) {
           setProcessingStatus("Rendering 4s Intro Sequence...");
           
-          // Cycle through images if multiple exist
           const imgIndex = Math.floor((now / INTRO_DURATION) * loadedImages.length);
           const currentImg = loadedImages[imgIndex];
           
           let scale = 1.0;
-          if (config.introTransition === 'zoom-in') scale = 1 + (now / INTRO_DURATION) * 0.1;
+          if (config.introTransition === 'zoom-in') {
+            const cycleProgress = (now % (INTRO_DURATION / loadedImages.length)) / (INTRO_DURATION / loadedImages.length);
+            scale = 1 + cycleProgress * 0.05;
+          }
           
           const drawW = width * scale;
           const drawH = height * scale;
@@ -272,21 +295,17 @@ export function MediaMergeApp() {
                 <UploadCard
                   type="image"
                   title="Banner Assets"
-                  description="Compulsory 4s intro frame(s)"
+                  description="At least one image is compulsory for the 4s intro"
                   accept=".jpg,.jpeg,.png"
-                  file={images[images.length - 1] || null}
+                  multiple
+                  file={images.length > 0 ? images[images.length - 1] : null}
                   onUpload={(f) => handleUpload('image', f)}
                   onClear={() => setImages([])}
                 />
                 {images.length > 0 && (
                   <div className="flex flex-wrap gap-2 p-4 bg-white/5 rounded-2xl border border-white/5">
                     {images.map((img, i) => (
-                      <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
-                        <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" />
-                        <Button variant="destructive" size="icon" className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity h-full w-full rounded-none" onClick={() => removeImage(i)}>
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
+                      <ImageThumbnail key={`${img.name}-${i}`} file={img} onRemove={() => removeImage(i)} />
                     ))}
                   </div>
                 )}
@@ -315,7 +334,7 @@ export function MediaMergeApp() {
                 <CardDescription>Randomly picked and auto-looped to 1:30</CardDescription>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col gap-4">
-                <div className="flex-1 overflow-y-auto max-h-[220px] space-y-2 pr-2 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto max-h-[300px] space-y-2 pr-2 custom-scrollbar">
                   {audios.map((a, i) => (
                     <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 group">
                       <div className="flex flex-col">
@@ -335,8 +354,8 @@ export function MediaMergeApp() {
                   )}
                 </div>
                 <Button variant="outline" className="w-full h-14 border-dashed border-white/10 hover:border-primary/50 text-xs font-bold uppercase tracking-widest" onClick={() => document.getElementById('audio-input')?.click()}>
-                  <input id="audio-input" type="file" accept=".mp3,.wav" className="hidden" onChange={(e) => e.target.files?.[0] && handleUpload('audio', e.target.files[0])} />
-                  Add New Audio
+                  <input id="audio-input" type="file" multiple accept=".mp3,.wav" className="hidden" onChange={(e) => e.target.files && handleUpload('audio', Array.from(e.target.files))} />
+                  Add To Pool
                 </Button>
               </CardContent>
             </Card>
