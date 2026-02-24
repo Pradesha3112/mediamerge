@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, Share2, Play, CheckCircle, FileVideo, HardDrive, RotateCcw } from 'lucide-react';
+import { Download, Share2, Play, CheckCircle, FileVideo, HardDrive, RotateCcw, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { formatBytes } from '@/lib/media-utils';
@@ -15,16 +15,20 @@ interface CombinedOutputProps {
 }
 
 export function CombinedOutput({ blob, image, onReset }: CombinedOutputProps) {
-  const [videoUrl, setVideoUrl] = useState<string>("");
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
+    if (!blob) return;
     const url = URL.createObjectURL(blob);
     setVideoUrl(url);
-    return () => URL.revokeObjectURL(url);
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
   }, [blob]);
 
   const handleDownload = () => {
+    if (!videoUrl) return;
     const a = document.createElement('a');
     a.href = videoUrl;
     a.download = `MediaMerge_${Date.now()}.mp4`;
@@ -65,17 +69,26 @@ export function CombinedOutput({ blob, image, onReset }: CombinedOutputProps) {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="relative group aspect-video rounded-xl overflow-hidden bg-black ring-1 ring-white/10 shadow-2xl">
-              <video 
-                src={videoUrl} 
-                className="w-full h-full object-contain"
-                controls
-                autoPlay
-              />
+            <div className="relative group aspect-video rounded-xl overflow-hidden bg-black ring-1 ring-white/10 shadow-2xl flex items-center justify-center">
+              {videoUrl ? (
+                <video 
+                  src={videoUrl} 
+                  className="w-full h-full object-contain"
+                  controls
+                  autoPlay
+                />
+              ) : (
+                <Loader2 className="animate-spin text-primary" size={32} />
+              )}
             </div>
 
             <div className="flex flex-wrap gap-4">
-              <Button size="lg" className="flex-1 h-14 bg-primary hover:bg-primary/90 text-white font-bold" onClick={handleDownload}>
+              <Button 
+                size="lg" 
+                className="flex-1 h-14 bg-primary hover:bg-primary/90 text-white font-bold" 
+                onClick={handleDownload}
+                disabled={!videoUrl}
+              >
                 <Download className="mr-2" size={20} />
                 Download Final Video ({formatBytes(blob.size)})
               </Button>

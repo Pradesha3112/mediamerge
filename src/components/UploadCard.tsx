@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Image as ImageIcon, Video, Music, X, Upload, FileText, CheckCircle2 } from 'lucide-react';
 import { formatBytes, formatDuration } from '@/lib/media-utils';
-import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
 interface UploadCardProps {
@@ -24,7 +23,20 @@ interface UploadCardProps {
 
 export function UploadCard({ type, title, description, accept, file, onUpload, onClear, metadata }: UploadCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = React.useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [file]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
@@ -80,16 +92,16 @@ export function UploadCard({ type, title, description, accept, file, onUpload, o
         ) : (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
             <div className="relative rounded-lg overflow-hidden bg-black/20 aspect-video flex items-center justify-center">
-              {type === 'image' && (
-                <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-contain" />
+              {type === 'image' && previewUrl && (
+                <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
               )}
-              {type === 'video' && (
-                <video src={URL.createObjectURL(file)} className="w-full h-full" controls={false} />
+              {type === 'video' && previewUrl && (
+                <video src={previewUrl} className="w-full h-full" controls={false} />
               )}
-              {type === 'audio' && (
+              {type === 'audio' && previewUrl && (
                 <div className="flex flex-col items-center">
                   <Music className="text-primary mb-2" size={48} />
-                  <audio src={URL.createObjectURL(file)} controls className="w-full max-w-[200px] h-8" />
+                  <audio src={previewUrl} controls className="w-full max-w-[200px] h-8" />
                 </div>
               )}
               <Button
