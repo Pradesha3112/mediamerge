@@ -17,7 +17,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { cn } from '@/lib/utils';
 
 const INTRO_DURATION = 4; 
-const EXACT_FINAL_DURATION = 90; // Strictly 1:30
+const END_CARD_DURATION = 4;
+const EXACT_FINAL_DURATION = 90; // Strictly 1:30 (90 seconds)
 
 function ImageThumbnail({ file, onRemove }: { file: File; onRemove: () => void }) {
   const url = useMemo(() => URL.createObjectURL(file), [file]);
@@ -58,7 +59,7 @@ export function MediaMergeApp() {
     watermarkText: 'MediaFusion',
     roundedCorners: true,
     vignette: true,
-    playbackSpeed: 1,
+    playbackSpeed: 1, // Will be overridden by Smart Normalizer if needed
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -95,14 +96,18 @@ export function MediaMergeApp() {
 
     setIsProcessing(true);
     setProgress(0);
-    setProcessingStatus("Assembling media blocks...");
+    setProcessingStatus("Calibrating Smart Normalizer...");
 
     try {
       const audioFile = audios[Math.floor(Math.random() * audios.length)];
       
       const loadedImages = await Promise.all(images.slice(0, 10).map(img => loadImage(img)));
       const vidEl = await loadVideo(video);
-      vidEl.playbackRate = config.playbackSpeed;
+      
+      // Calculate Normalized Speed to fit into 1:30 minus Intro and End Card
+      const videoPhaseDuration = EXACT_FINAL_DURATION - INTRO_DURATION - END_CARD_DURATION;
+      const normalizedPlaybackRate = vidEl.duration / videoPhaseDuration;
+      vidEl.playbackRate = normalizedPlaybackRate;
       
       const audioBuffer = await audioFile.arrayBuffer();
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -172,7 +177,6 @@ export function MediaMergeApp() {
       recorder.start();
       audioSource.start(0);
       vidEl.play();
-      vidEl.loop = true;
 
       const startTime = performance.now();
       const transitionDuration = 1.0;
@@ -223,9 +227,24 @@ export function MediaMergeApp() {
             ctx.globalAlpha = alpha;
             ctx.drawImage(vidEl, 0, 0, width, height);
           }
-        } else {
-          setProcessingStatus("Stabilizing 1:30 Master Export...");
+        } else if (now < EXACT_FINAL_DURATION - END_CARD_DURATION) {
+          setProcessingStatus("Smart Normalizer: Syncing Content...");
           ctx.drawImage(vidEl, 0, 0, width, height);
+        } else {
+          setProcessingStatus("Rendering End Card...");
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, width, height);
+          
+          // Render THANK YOU text
+          ctx.font = 'bold 80px Inter, sans-serif';
+          ctx.fillStyle = 'white';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('THANK YOU', width / 2, height / 2);
+          
+          ctx.font = '30px Inter, sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.7)';
+          ctx.fillText('MediaFusion Master Export', width / 2, height / 2 + 80);
         }
 
         ctx.restore();
@@ -313,7 +332,7 @@ export function MediaMergeApp() {
               <UploadCard
                 type="video"
                 title="Master Recording"
-                description={`Auto-loops to hit 1:30 exactly`}
+                description={`Smart Normalized to hit 1:30 exactly`}
                 accept=".mp4,.webm"
                 file={video}
                 onUpload={(f) => handleUpload('video', f)}
