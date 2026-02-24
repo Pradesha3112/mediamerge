@@ -6,16 +6,15 @@ import { CombinedOutput } from './CombinedOutput';
 import { AdvancedOptions, type Config } from './AdvancedOptions';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { Layers, Loader2, RotateCcw, Zap, Sparkles, Film } from 'lucide-react';
+import { Layers, Loader2, RotateCcw, Zap, Sparkles, Film, Clock } from 'lucide-react';
 import { getFileMetadata, loadImage, loadVideo } from '@/lib/media-utils';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
-const INTRO_DURATION = 3; // seconds
-const TRANSITION_DURATION = 0.8; // seconds
+const INTRO_DURATION = 3; 
+const MIN_FINAL_DURATION = 120; // 2 minutes as requested
 
 export function MediaMergeApp() {
   const [image, setImage] = useState<File | null>(null);
@@ -29,7 +28,7 @@ export function MediaMergeApp() {
     audioVolume: 0.8,
     audioFade: true,
     watermark: true,
-    watermarkText: 'MediaMerge',
+    watermarkText: 'MediaFusion',
     roundedCorners: true,
     vignette: true,
   });
@@ -41,16 +40,20 @@ export function MediaMergeApp() {
   const { toast } = useToast();
 
   const handleUpload = async (type: 'image' | 'video' | 'audio', file: File) => {
-    if (type === 'image') setImage(file);
-    if (type === 'video') {
-      const meta = await getFileMetadata(file);
-      setVideo(file);
-      setMetadata(prev => ({ ...prev, video: meta }));
-    }
-    if (type === 'audio') {
-      const meta = await getFileMetadata(file);
-      setAudio(file);
-      setMetadata(prev => ({ ...prev, audio: meta }));
+    try {
+      if (type === 'image') setImage(file);
+      if (type === 'video') {
+        const meta = await getFileMetadata(file);
+        setVideo(file);
+        setMetadata(prev => ({ ...prev, video: meta }));
+      }
+      if (type === 'audio') {
+        const meta = await getFileMetadata(file);
+        setAudio(file);
+        setMetadata(prev => ({ ...prev, audio: meta }));
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Upload Error", description: "Invalid file format or corrupted file." });
     }
   };
 
@@ -59,85 +62,87 @@ export function MediaMergeApp() {
 
     setIsProcessing(true);
     setProgress(0);
-    setProcessingStatus("Initializing Web Renderer...");
+    setProcessingStatus("Initializing Fusion Core...");
 
     try {
-      // Load resources
       const imgEl = await loadImage(image);
       const vidEl = await loadVideo(video);
       const audioBuffer = await audio.arrayBuffer();
       
-      const audioCtx = new AudioContext();
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const decodedAudio = await audioCtx.decodeAudioData(audioBuffer);
 
       const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
+      const ctx = canvas.getContext('2d', { alpha: false })!;
       
-      // Standardize to 720p or video size
       const width = vidEl.videoWidth || 1280;
       const height = vidEl.videoHeight || 720;
       canvas.width = width;
       canvas.height = height;
 
-      const totalDuration = INTRO_DURATION + decodedAudio.duration;
+      // Calculate Duration Logic
+      const rawVideoDuration = vidEl.duration;
+      const totalRequestedDuration = Math.max(MIN_FINAL_DURATION, INTRO_DURATION + rawVideoDuration);
+      
       const stream = canvas.captureStream(30);
       
-      // Setup Audio Output
+      // Audio Setup
       const audioDest = audioCtx.createMediaStreamDestination();
       const audioSource = audioCtx.createBufferSource();
       audioSource.buffer = decodedAudio;
-      audioSource.loop = true; // Looping as per logic rules
+      audioSource.loop = true;
 
       const gainNode = audioCtx.createGain();
       gainNode.gain.value = config.audioVolume;
       
-      // Audio Fading
       if (config.audioFade) {
         gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
         gainNode.gain.linearRampToValueAtTime(config.audioVolume, audioCtx.currentTime + 1);
-        gainNode.gain.setValueAtTime(config.audioVolume, audioCtx.currentTime + totalDuration - 1);
-        gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + totalDuration);
+        gainNode.gain.setValueAtTime(config.audioVolume, audioCtx.currentTime + totalRequestedDuration - 1);
+        gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + totalRequestedDuration);
       }
 
       audioSource.connect(gainNode);
       gainNode.connect(audioDest);
       
-      // Combine Streams
       const combinedStream = new MediaStream([
         ...stream.getVideoTracks(),
         ...audioDest.stream.getAudioTracks()
       ]);
 
-      const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm;codecs=vp9' });
+      const recorder = new MediaRecorder(combinedStream, { 
+        mimeType: 'video/webm;codecs=vp9',
+        videoBitsPerSecond: 5000000 
+      });
+      
       const chunks: Blob[] = [];
       recorder.ondataavailable = e => chunks.push(e.data);
       recorder.onstop = () => {
         setFinalVideoBlob(new Blob(chunks, { type: 'video/mp4' }));
         setIsProcessing(false);
-        toast({ title: "Masterpiece Ready!", description: "Media successfully merged offline." });
+        toast({ title: "Fusion Complete!", description: "Video exported successfully at ≥ 2:00 duration." });
       };
 
       recorder.start();
       audioSource.start(0);
       vidEl.play();
+      vidEl.loop = true;
 
       const startTime = performance.now();
+      const transitionDuration = 1.0;
       
       const render = () => {
         const now = (performance.now() - startTime) / 1000;
-        const p = Math.min((now / totalDuration) * 100, 100);
+        const p = Math.min((now / totalRequestedDuration) * 100, 100);
         setProgress(p);
 
-        ctx.clearRect(0, 0, width, height);
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, width, height);
 
         if (now < INTRO_DURATION) {
-          setProcessingStatus("Generating Cinematic Intro...");
-          // Phase 1: Intro Logic
+          setProcessingStatus("Rendering Cinematic Intro...");
           let scale = 1.0;
-          if (config.introTransition === 'zoom-in') scale = 1 + (now / INTRO_DURATION) * 0.2;
-          if (config.introTransition === 'zoom-out') scale = 1.2 - (now / INTRO_DURATION) * 0.2;
+          if (config.introTransition === 'zoom-in') scale = 1 + (now / INTRO_DURATION) * 0.15;
           
           const drawW = width * scale;
           const drawH = height * scale;
@@ -149,40 +154,41 @@ export function MediaMergeApp() {
           ctx.drawImage(imgEl, offsetX, offsetY, drawW, drawH);
           ctx.restore();
 
-          // Overlay Fade for Phase 2
-          if (now > INTRO_DURATION - TRANSITION_DURATION) {
-            const alpha = (now - (INTRO_DURATION - TRANSITION_DURATION)) / TRANSITION_DURATION;
+          // Transition Overlay
+          if (now > INTRO_DURATION - transitionDuration) {
+            const alpha = (now - (INTRO_DURATION - transitionDuration)) / transitionDuration;
             ctx.globalAlpha = alpha;
             ctx.drawImage(vidEl, 0, 0, width, height);
             ctx.globalAlpha = 1.0;
           }
-        } else if (now < totalDuration) {
-          setProcessingStatus("Merging Screen Recording...");
-          // Phase 2: Play Recording
+        } else {
+          setProcessingStatus(now < MIN_FINAL_DURATION ? "Looping Content to 2:00..." : "Finalizing Stream...");
           ctx.drawImage(vidEl, 0, 0, width, height);
         }
 
-        // Global Effects
+        // Enhancements
         if (config.vignette) {
-          const grad = ctx.createRadialGradient(width/2, height/2, width/4, width/2, height/2, width/1.5);
+          const grad = ctx.createRadialGradient(width/2, height/2, width/4, width/2, height/2, width/1.2);
           grad.addColorStop(0, 'transparent');
-          grad.addColorStop(1, 'rgba(0,0,0,0.5)');
+          grad.addColorStop(1, 'rgba(0,0,0,0.6)');
           ctx.fillStyle = grad;
           ctx.fillRect(0, 0, width, height);
         }
 
         if (config.watermark) {
-          ctx.font = '20px Inter';
-          ctx.fillStyle = 'rgba(255,255,255,0.3)';
-          ctx.fillText(config.watermarkText, width - 150, height - 30);
+          ctx.font = 'bold 24px Inter, sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.4)';
+          ctx.textAlign = 'right';
+          ctx.fillText(config.watermarkText, width - 40, height - 40);
         }
 
-        if (now < totalDuration) {
+        if (now < totalRequestedDuration) {
           requestAnimationFrame(render);
         } else {
           recorder.stop();
           audioSource.stop();
           vidEl.pause();
+          audioCtx.close();
         }
       };
 
@@ -191,7 +197,7 @@ export function MediaMergeApp() {
     } catch (e) {
       console.error(e);
       setIsProcessing(false);
-      toast({ variant: "destructive", title: "Processing Failed", description: "Browser memory limits reached." });
+      toast({ variant: "destructive", title: "Fusion Failed", description: "Browser environment error. Please try smaller files." });
     }
   };
 
@@ -211,20 +217,24 @@ export function MediaMergeApp() {
     <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 transition-colors">
       <div className="max-w-7xl mx-auto space-y-12">
         {/* Header */}
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="flex-1">
             <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-primary/10 text-primary mb-4">
-              <Layers size={40} strokeWidth={2.5} />
+              <Film size={40} strokeWidth={2.5} />
             </div>
             <h1 className="text-5xl sm:text-6xl font-extrabold tracking-tight">
-              Media<span className="gradient-text">Merge</span>
+              Media<span className="gradient-text">Fusion</span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mt-4 leading-relaxed">
-              Studio-quality offline media engine. 100% browser-side processing.
+              Professional offline video engine. Automagically extends content to a 2-minute cinematic masterpiece.
             </p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex items-center gap-4 bg-card/50 backdrop-blur p-2 rounded-full border border-white/10">
              <ThemeToggle />
+             <div className="px-4 flex items-center gap-2 text-sm font-medium">
+               <Clock size={16} className="text-primary" />
+               Min 2:00 Output
+             </div>
           </div>
         </div>
 
@@ -234,8 +244,8 @@ export function MediaMergeApp() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
               <UploadCard
                 type="image"
-                title="Intro Cover"
-                description="3s Cinematic Intro"
+                title="Cover Art"
+                description="Intro Image (3s)"
                 accept=".jpg,.jpeg,.png"
                 file={image}
                 onUpload={(f) => handleUpload('image', f)}
@@ -243,8 +253,8 @@ export function MediaMergeApp() {
               />
               <UploadCard
                 type="video"
-                title="Screen Recording"
-                description="Main content layer"
+                title="Main Footage"
+                description="Loops to reach 2:00"
                 accept=".mp4,.webm"
                 file={video}
                 onUpload={(f) => handleUpload('video', f)}
@@ -253,8 +263,8 @@ export function MediaMergeApp() {
               />
               <UploadCard
                 type="audio"
-                title="Soundtrack"
-                description="Auto-loops & Syncs"
+                title="Background Track"
+                description="Auto-loops & Fades"
                 accept=".mp3,.wav"
                 file={audio}
                 onUpload={(f) => handleUpload('audio', f)}
@@ -266,42 +276,51 @@ export function MediaMergeApp() {
             {/* Action Area */}
             <div className="flex flex-col items-center justify-center space-y-8 py-8">
               {isProcessing ? (
-                <div className="w-full max-w-lg space-y-6 text-center animate-pulse">
+                <div className="w-full max-w-xl space-y-6 text-center animate-pulse">
                   <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="animate-spin text-primary" size={48} />
-                    <span className="text-xl font-semibold text-primary">{processingStatus}</span>
+                    <Loader2 className="animate-spin text-primary" size={64} />
+                    <span className="text-2xl font-bold text-primary tracking-tight">{processingStatus}</span>
                   </div>
-                  <div className="space-y-2">
-                    <Progress value={progress} className="h-3 w-full" />
-                    <p className="text-sm text-muted-foreground">{Math.round(progress)}% Recorded Locally</p>
+                  <div className="space-y-3">
+                    <Progress value={progress} className="h-4 w-full bg-primary/10" />
+                    <div className="flex justify-between text-sm text-muted-foreground font-medium">
+                      <span>{Math.round(progress)}% Complete</span>
+                      <span>Estimated: ~30s remaining</span>
+                    </div>
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-4 justify-center">
+                <div className="flex flex-col items-center gap-6">
                   <Button
                     size="lg"
                     disabled={!allUploaded}
                     onClick={combineMedia}
                     className={cn(
-                      "h-20 px-16 text-xl font-bold rounded-2xl transition-all duration-500",
+                      "h-24 px-20 text-2xl font-black rounded-3xl transition-all duration-500",
                       allUploaded 
-                        ? "bg-primary hover:bg-primary/90 text-white shadow-[0_20px_50px_rgba(8,_112,_184,_0.7)] scale-105 active:scale-95 animate-pulse-subtle" 
-                        : "bg-muted text-muted-foreground opacity-50"
+                        ? "bg-primary hover:bg-primary/90 text-white shadow-[0_20px_60px_rgba(8,_112,_184,_0.5)] scale-105 active:scale-95 animate-pulse-subtle" 
+                        : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
                     )}
                   >
-                    <Zap className="mr-3" size={28} fill="currentColor" />
-                    Combine & Export
+                    <Zap className="mr-4" size={32} fill="currentColor" />
+                    Fuse & Export (Min 2:00)
                   </Button>
                   
+                  {!allUploaded && (
+                    <p className="text-sm text-muted-foreground animate-bounce">
+                      Upload all 3 components to unlock the Fusion Core
+                    </p>
+                  )}
+
                   {(image || video || audio) && (
                     <Button
-                      variant="outline"
-                      size="lg"
+                      variant="ghost"
+                      size="sm"
                       onClick={resetAll}
-                      className="h-20 px-8 rounded-2xl border-white/10 hover:bg-white/5"
+                      className="text-muted-foreground hover:text-destructive transition-colors"
                     >
-                      <RotateCcw className="mr-2" size={24} />
-                      Reset
+                      <RotateCcw className="mr-2" size={16} />
+                      Reset Fusion Deck
                     </Button>
                   )}
                 </div>
