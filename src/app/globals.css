@@ -4,6 +4,29 @@
 
 @layer base {
   :root {
+    --background: 0 0% 100%;
+    --foreground: 229 20% 17%;
+    --card: 0 0% 98%;
+    --card-foreground: 229 20% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 229 20% 17%;
+    --primary: 209 80% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 255 54% 53%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 229 10% 90%;
+    --muted-foreground: 229 10% 40%;
+    --accent: 255 54% 53%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 229 20% 90%;
+    --input: 229 20% 90%;
+    --ring: 209 80% 58%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
     --background: 229 20% 17%;
     --foreground: 0 0% 100%;
     --card: 229 20% 21%;
@@ -23,7 +46,6 @@
     --border: 229 20% 28%;
     --input: 229 20% 28%;
     --ring: 209 80% 58%;
-    --radius: 0.75rem;
   }
 }
 
@@ -32,15 +54,15 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    background-image: radial-gradient(circle at 50% -20%, hsl(255 54% 53% / 0.15), transparent 70%),
-                      radial-gradient(circle at 0% 100%, hsl(209 80% 58% / 0.05), transparent 50%);
+    @apply bg-background text-foreground transition-colors duration-300;
+    background-image: radial-gradient(circle at 50% -20%, hsl(var(--primary) / 0.1), transparent 70%),
+                      radial-gradient(circle at 0% 100%, hsl(var(--secondary) / 0.05), transparent 50%);
     background-attachment: fixed;
   }
 }
 
 .glass-card {
-  @apply bg-card/50 backdrop-blur-md border border-white/10 shadow-xl;
+  @apply bg-card/50 backdrop-blur-md border border-foreground/10 shadow-xl;
 }
 
 .upload-zone {
