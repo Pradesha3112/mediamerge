@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { Settings2, Sparkles, Volume2, Type } from 'lucide-react';
+import { Settings2, Sparkles, Volume2, Type, Gauge } from 'lucide-react';
 
 export type Config = {
   introTransition: string;
@@ -17,6 +17,7 @@ export type Config = {
   watermarkText: string;
   roundedCorners: boolean;
   vignette: boolean;
+  playbackSpeed: number;
 };
 
 interface AdvancedOptionsProps {
@@ -70,6 +71,24 @@ export function AdvancedOptions({ config, onChange }: AdvancedOptionsProps) {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="grid gap-2">
+            <Label className="flex items-center gap-2">
+              <Gauge size={14} className="text-primary" /> Playback Speed
+            </Label>
+            <Select value={String(config.playbackSpeed)} onValueChange={(v) => update('playbackSpeed', parseFloat(v))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Speed" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0.5">0.5×</SelectItem>
+                <SelectItem value="1">1.0× (Normal)</SelectItem>
+                <SelectItem value="1.25">1.25×</SelectItem>
+                <SelectItem value="1.5">1.5×</SelectItem>
+                <SelectItem value="2">2.0×</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="space-y-4 pt-4 border-t border-white/10">
@@ -119,7 +138,7 @@ export function AdvancedOptions({ config, onChange }: AdvancedOptionsProps) {
               <Label className="flex items-center gap-2">
                 <Type size={14} /> Watermark
               </Label>
-              <p className="text-[10px] text-muted-foreground">Add "MediaMerge" branding.</p>
+              <p className="text-[10px] text-muted-foreground">Add "MediaFusion" branding.</p>
             </div>
             <Switch checked={config.watermark} onCheckedChange={(v) => update('watermark', v)} />
           </div>
