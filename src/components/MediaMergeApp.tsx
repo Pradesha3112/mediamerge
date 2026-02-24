@@ -16,7 +16,6 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-const INTRO_DURATION = 4; 
 const END_CARD_DURATION = 4;
 const EXACT_FINAL_DURATION = 90; // Strictly 1:30 (90 seconds)
 
@@ -59,7 +58,7 @@ export function MediaMergeApp() {
     watermarkText: 'MediaFusion',
     roundedCorners: true,
     vignette: true,
-    playbackSpeed: 1, // Will be overridden by Smart Normalizer if needed
+    playbackSpeed: 1, 
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -81,6 +80,11 @@ export function MediaMergeApp() {
     const files = Array.isArray(input) ? input : [input];
     
     if (type === 'image') {
+      // Limit to a reasonable number of intro images to prevent the video phase from disappearing
+      if (images.length + files.length > 15) {
+        toast({ variant: "destructive", title: "Limit Reached", description: "Maximum 15 intro images allowed to maintain video length." });
+        return;
+      }
       setImages(prev => [...prev, ...files]);
       toast({ title: "Banner Assets Added", description: `${files.length} image(s) added to pool.` });
     }
@@ -100,12 +104,16 @@ export function MediaMergeApp() {
 
     try {
       const audioFile = audios[Math.floor(Math.random() * audios.length)];
-      
-      const loadedImages = await Promise.all(images.slice(0, 10).map(img => loadImage(img)));
+      const loadedImages = await Promise.all(images.map(img => loadImage(img)));
       const vidEl = await loadVideo(video);
       
-      // Calculate Normalized Speed to fit into 1:30 minus Intro and End Card
-      const videoPhaseDuration = EXACT_FINAL_DURATION - INTRO_DURATION - END_CARD_DURATION;
+      const introPhaseTotal = images.length * 4;
+      const videoPhaseDuration = EXACT_FINAL_DURATION - introPhaseTotal - END_CARD_DURATION;
+
+      if (videoPhaseDuration <= 0) {
+        throw new Error("Too many images. Intro duration exceeds total video length.");
+      }
+
       const normalizedPlaybackRate = vidEl.duration / videoPhaseDuration;
       vidEl.playbackRate = normalizedPlaybackRate;
       
@@ -124,7 +132,6 @@ export function MediaMergeApp() {
       canvas.height = height;
 
       const totalRequestedDuration = EXACT_FINAL_DURATION;
-      
       const stream = canvas.captureStream(30);
       const audioDest = audioCtx.createMediaStreamDestination();
       const audioSource = audioCtx.createBufferSource();
@@ -172,6 +179,11 @@ export function MediaMergeApp() {
         await saveVideoEntry(entry);
         loadHistory();
         setIsProcessing(false);
+
+        // AUTO-RESET Input Section after successful generation
+        setImages([]);
+        setVideo(null);
+        toast({ title: "Workspace Reset", description: "Banner and Video inputs cleared for your next project." });
       };
 
       recorder.start();
@@ -179,7 +191,7 @@ export function MediaMergeApp() {
       vidEl.play();
 
       const startTime = performance.now();
-      const transitionDuration = 1.0;
+      const crossfadeDuration = 0.8;
       
       const applyFilter = (ctx: CanvasRenderingContext2D) => {
         switch(config.filter) {
@@ -203,16 +215,16 @@ export function MediaMergeApp() {
         ctx.save();
         applyFilter(ctx);
 
-        if (now < INTRO_DURATION) {
-          setProcessingStatus("Rendering 4s Intro Sequence...");
+        if (now < introPhaseTotal) {
+          setProcessingStatus(`Rendering Banners (${Math.floor(now/4) + 1}/${loadedImages.length})...`);
           
-          const imgIndex = Math.floor((now / INTRO_DURATION) * loadedImages.length);
+          const imgIndex = Math.floor(now / 4);
           const currentImg = loadedImages[imgIndex];
+          const imageLocalTime = now % 4;
           
           let scale = 1.0;
           if (config.introTransition === 'zoom-in') {
-            const cycleProgress = (now % (INTRO_DURATION / loadedImages.length)) / (INTRO_DURATION / loadedImages.length);
-            scale = 1 + cycleProgress * 0.05;
+            scale = 1 + (imageLocalTime / 4) * 0.05;
           }
           
           const drawW = width * scale;
@@ -222,20 +234,20 @@ export function MediaMergeApp() {
 
           ctx.drawImage(currentImg, offsetX, offsetY, drawW, drawH);
 
-          if (now > INTRO_DURATION - transitionDuration) {
-            const alpha = (now - (INTRO_DURATION - transitionDuration)) / transitionDuration;
+          // Handle transition to next image OR to video
+          if (now > introPhaseTotal - crossfadeDuration) {
+            const alpha = (now - (introPhaseTotal - crossfadeDuration)) / crossfadeDuration;
             ctx.globalAlpha = alpha;
             ctx.drawImage(vidEl, 0, 0, width, height);
           }
         } else if (now < EXACT_FINAL_DURATION - END_CARD_DURATION) {
-          setProcessingStatus("Smart Normalizer: Syncing Content...");
+          setProcessingStatus("Normalizer: Syncing Content...");
           ctx.drawImage(vidEl, 0, 0, width, height);
         } else {
-          setProcessingStatus("Rendering End Card...");
+          setProcessingStatus("Generating Outro...");
           ctx.fillStyle = '#000';
           ctx.fillRect(0, 0, width, height);
           
-          // Render THANK YOU text
           ctx.font = 'bold 80px Inter, sans-serif';
           ctx.fillStyle = 'white';
           ctx.textAlign = 'center';
@@ -275,9 +287,9 @@ export function MediaMergeApp() {
       };
 
       render();
-    } catch (e) {
+    } catch (e: any) {
       setIsProcessing(false);
-      toast({ variant: "destructive", title: "Fusion Error", description: "Hardware acceleration limit reached." });
+      toast({ variant: "destructive", title: "Fusion Error", description: e.message || "Hardware acceleration limit reached." });
     }
   };
 
@@ -314,7 +326,7 @@ export function MediaMergeApp() {
                 <UploadCard
                   type="image"
                   title="Banner Assets"
-                  description="At least one image is compulsory for the 4s intro"
+                  description="Each banner plays for 4s. At least one required."
                   accept=".jpg,.jpeg,.png"
                   multiple
                   file={images.length > 0 ? images[images.length - 1] : null}
@@ -332,7 +344,7 @@ export function MediaMergeApp() {
               <UploadCard
                 type="video"
                 title="Master Recording"
-                description={`Smart Normalized to hit 1:30 exactly`}
+                description={`Smart Normalized to hit exactly 1:30 total.`}
                 accept=".mp4,.webm"
                 file={video}
                 onUpload={(f) => handleUpload('video', f)}
@@ -350,7 +362,7 @@ export function MediaMergeApp() {
                   {audios.length > 0 && <Badge variant="secondary">{audios.length} Tracks</Badge>}
                 </div>
                 <CardTitle className="text-xl mt-2">Background Audio Pool</CardTitle>
-                <CardDescription>Randomly picked and auto-looped to 1:30</CardDescription>
+                <CardDescription>Randomly picked and auto-looped to 1:30.</CardDescription>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col gap-4">
                 <div className="flex-1 overflow-y-auto max-h-[300px] space-y-2 pr-2 custom-scrollbar">
@@ -442,7 +454,7 @@ export function MediaMergeApp() {
           <div className="pt-12 animate-in zoom-in-95 duration-700">
             <CombinedOutput 
               blob={finalVideoBlob}
-              image={images[0]} 
+              image={null} 
               onReset={() => setFinalVideoBlob(null)} 
             />
           </div>
