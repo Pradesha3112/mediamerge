@@ -6,11 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { Settings2, Sparkles, Volume2, Type, Gauge } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Settings2, Sparkles, Volume2, Type, Gauge, Filter, Share2, Layers } from 'lucide-react';
 
 export type Config = {
   introTransition: string;
   videoTransition: string;
+  transitionPack: 'basic' | 'cinematic' | 'glitch' | 'modern';
+  filter: 'none' | 'bw' | 'sepia' | 'contrast' | 'warm' | 'cool' | 'retro';
+  preset: 'youtube' | 'linkedin';
   audioVolume: number;
   audioFade: boolean;
   watermark: boolean;
@@ -31,53 +35,82 @@ export function AdvancedOptions({ config, onChange }: AdvancedOptionsProps) {
   };
 
   return (
-    <Card className="glass-card animate-in fade-in slide-in-from-right-4 duration-500">
-      <CardHeader>
+    <Card className="glass-card border-white/5 shadow-2xl">
+      <CardHeader className="pb-4">
         <div className="flex items-center gap-2">
           <Settings2 className="text-primary" size={20} />
-          <CardTitle>Advanced Customization</CardTitle>
+          <CardTitle className="text-xl">Editing Studio</CardTitle>
         </div>
-        <CardDescription>Tailor the cinematic experience of your output.</CardDescription>
+        <CardDescription className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Advanced Cinematic Tuning</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-4">
+        
+        {/* Export Presets */}
+        <div className="space-y-4 pb-4 border-b border-white/5">
           <div className="grid gap-2">
-            <Label className="flex items-center gap-2">
-              <Sparkles size={14} className="text-secondary" /> Intro Animation
+            <Label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter">
+              <Share2 size={14} className="text-primary" /> Export Preset
             </Label>
-            <Select value={config.introTransition} onValueChange={(v) => update('introTransition', v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose style" />
+            <Select value={config.preset} onValueChange={(v) => update('preset', v)}>
+              <SelectTrigger className="h-10 rounded-xl bg-white/5 border-white/10">
+                <SelectValue placeholder="Resolution" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="fade">Smooth Fade In</SelectItem>
-                <SelectItem value="zoom-in">Ken Burns (Zoom In)</SelectItem>
-                <SelectItem value="zoom-out">Ken Burns (Zoom Out)</SelectItem>
-                <SelectItem value="blur">Blur to Clear</SelectItem>
+                <SelectItem value="youtube">YouTube Tutorial (16:9)</SelectItem>
+                <SelectItem value="linkedin">LinkedIn Professional (4:5)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Visual Tuning */}
+        <div className="space-y-4 pb-4 border-b border-white/5">
+           <div className="grid gap-2">
+            <Label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter">
+              <Filter size={14} className="text-secondary" /> Cinematic Filter
+            </Label>
+            <Select value={config.filter} onValueChange={(v) => update('filter', v)}>
+              <SelectTrigger className="h-10 rounded-xl bg-white/5 border-white/10">
+                <SelectValue placeholder="Style" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No Filter (Natural)</SelectItem>
+                <SelectItem value="bw">Black & White</SelectItem>
+                <SelectItem value="sepia">Vintage Sepia</SelectItem>
+                <SelectItem value="contrast">High Contrast</SelectItem>
+                <SelectItem value="warm">Warm Sunshine</SelectItem>
+                <SelectItem value="cool">Icy Cool</SelectItem>
+                <SelectItem value="retro">Retro VHS</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="grid gap-2">
-            <Label>Transition to Video</Label>
-            <Select value={config.videoTransition} onValueChange={(v) => update('videoTransition', v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose transition" />
+            <Label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter">
+              <Layers size={14} className="text-primary" /> Transition Pack
+            </Label>
+            <Select value={config.transitionPack} onValueChange={(v) => update('transitionPack', v)}>
+              <SelectTrigger className="h-10 rounded-xl bg-white/5 border-white/10">
+                <SelectValue placeholder="Transitions" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="crossfade">Crossfade</SelectItem>
-                <SelectItem value="fade-black">Fade through Black</SelectItem>
-                <SelectItem value="cut">Direct Cut</SelectItem>
+                <SelectItem value="basic">Basic Fade</SelectItem>
+                <SelectItem value="cinematic">Cinematic Zoom</SelectItem>
+                <SelectItem value="glitch">Digital Glitch</SelectItem>
+                <SelectItem value="modern">Modern Slide</SelectItem>
               </SelectContent>
             </Select>
           </div>
+        </div>
 
+        {/* Playback Controls */}
+        <div className="space-y-4 pb-4 border-b border-white/5">
           <div className="grid gap-2">
-            <Label className="flex items-center gap-2">
+            <Label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter">
               <Gauge size={14} className="text-primary" /> Playback Speed
             </Label>
             <Select value={String(config.playbackSpeed)} onValueChange={(v) => update('playbackSpeed', parseFloat(v))}>
-              <SelectTrigger>
+              <SelectTrigger className="h-10 rounded-xl bg-white/5 border-white/10">
                 <SelectValue placeholder="Speed" />
               </SelectTrigger>
               <SelectContent>
@@ -89,58 +122,62 @@ export function AdvancedOptions({ config, onChange }: AdvancedOptionsProps) {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="grid gap-2">
+            <Label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter">
+              <Type size={14} /> Master Watermark
+            </Label>
+            <Input 
+              value={config.watermarkText} 
+              onChange={(e) => update('watermarkText', e.target.value)}
+              placeholder="Studio Branding"
+              className="h-10 rounded-xl bg-white/5 border-white/10 text-xs"
+            />
+          </div>
         </div>
 
-        <div className="space-y-4 pt-4 border-t border-white/10">
+        {/* Audio Tuning */}
+        <div className="space-y-6 pt-2 pb-6 border-b border-white/5">
           <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="flex items-center gap-2">
-                <Volume2 size={14} /> Audio Fade (In/Out)
+            <div className="space-y-1">
+              <Label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter">
+                <Volume2 size={14} /> Audio Fade Transitions
               </Label>
-              <p className="text-[10px] text-muted-foreground">Smooth transitions for your sound.</p>
+              <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-widest leading-none">Smooth Master Audio Blend</p>
             </div>
             <Switch checked={config.audioFade} onCheckedChange={(v) => update('audioFade', v)} />
           </div>
 
-          <div className="space-y-3">
-            <div className="flex justify-between text-xs">
-              <Label>Background Volume</Label>
-              <span className="text-muted-foreground">{Math.round(config.audioVolume * 100)}%</span>
+          <div className="space-y-4">
+            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+              <span>Backing Track Volume</span>
+              <span>{Math.round(config.audioVolume * 100)}%</span>
             </div>
             <Slider 
               value={[config.audioVolume * 100]} 
               onValueChange={(v) => update('audioVolume', v[0] / 100)} 
               max={100} 
               step={1} 
+              className="py-2"
             />
           </div>
         </div>
 
-        <div className="space-y-4 pt-4 border-t border-white/10">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Vignette Effect</Label>
-              <p className="text-[10px] text-muted-foreground">Add cinematic dark edges.</p>
-            </div>
+        {/* Studio Presets */}
+        <div className="grid grid-cols-2 gap-4 pt-2">
+          <div className="flex flex-col gap-3 p-3 rounded-2xl bg-white/5 border border-white/5">
+            <Label className="text-[9px] font-black uppercase tracking-widest">Vignette</Label>
             <Switch checked={config.vignette} onCheckedChange={(v) => update('vignette', v)} />
           </div>
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Rounded Corners</Label>
-              <p className="text-[10px] text-muted-foreground">Soften the video edges.</p>
-            </div>
+          <div className="flex flex-col gap-3 p-3 rounded-2xl bg-white/5 border border-white/5">
+            <Label className="text-[9px] font-black uppercase tracking-widest">Rounded</Label>
             <Switch checked={config.roundedCorners} onCheckedChange={(v) => update('roundedCorners', v)} />
           </div>
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="flex items-center gap-2">
-                <Type size={14} /> Watermark
-              </Label>
-              <p className="text-[10px] text-muted-foreground">Add "MediaFusion" branding.</p>
+          <div className="flex flex-col gap-3 p-3 rounded-2xl bg-white/5 border border-white/5 col-span-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[9px] font-black uppercase tracking-widest">Overlay Master</Label>
+              <Switch checked={config.watermark} onCheckedChange={(v) => update('watermark', v)} />
             </div>
-            <Switch checked={config.watermark} onCheckedChange={(v) => update('watermark', v)} />
           </div>
         </div>
       </CardContent>
