@@ -37,3 +37,23 @@ export async function getFileMetadata(file: File): Promise<{ duration?: number; 
     }
   });
 }
+
+export function loadVideo(file: File): Promise<HTMLVideoElement> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.src = URL.createObjectURL(file);
+    video.muted = true;
+    video.playsInline = true;
+    video.onloadeddata = () => resolve(video);
+    video.onerror = reject;
+  });
+}
+
+export function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+  });
+}
