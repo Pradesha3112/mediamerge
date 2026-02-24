@@ -31,14 +31,14 @@ export function CombinedOutput({ blob, image, onReset }: CombinedOutputProps) {
     if (!videoUrl) return;
     const a = document.createElement('a');
     a.href = videoUrl;
-    a.download = `MediaFusion_Master_${Date.now()}.mp4`;
+    a.download = `MediaFusion_Master_1.30.mp4`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     
     toast({
       title: "Export Success",
-      description: "2-minute cinematic master file saved to your device.",
+      description: "Strict 1:30 master file saved to your device.",
     });
   };
 
@@ -65,10 +65,10 @@ export function CombinedOutput({ blob, image, onReset }: CombinedOutputProps) {
               </div>
               <div className="flex gap-2">
                 <Badge variant="outline" className="border-primary/30 text-primary">
-                  1080p WebM/MP4
+                  1080p Export
                 </Badge>
                 <Badge variant="secondary">
-                  Duration: ≥ 2:00
+                  Duration: 1:30 (Exact)
                 </Badge>
               </div>
             </div>
@@ -119,9 +119,9 @@ export function CombinedOutput({ blob, image, onReset }: CombinedOutputProps) {
               <div className="grid gap-2">
                 {[
                   { label: "Container", value: "MP4 (H.264/AAC)" },
-                  { label: "Minimum Target", value: "120 Seconds" },
-                  { label: "Bitrate", value: "5.0 Mbps (Target)" },
-                  { label: "Color Depth", value: "8-bit sRGB" }
+                  { label: "Exact Duration", value: "90.00 Seconds" },
+                  { label: "Bitrate", value: "8.0 Mbps (Target)" },
+                  { label: "Frame Rate", value: "30 FPS" }
                 ].map((spec, i) => (
                   <div key={i} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/10">
                     <span className="text-xs text-muted-foreground font-bold uppercase tracking-widest">{spec.label}</span>
@@ -136,7 +136,7 @@ export function CombinedOutput({ blob, image, onReset }: CombinedOutputProps) {
                   <span className="text-xs font-black uppercase tracking-widest">Privacy Guarantee</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Fusion processing happens 100% in your browser's private sandbox. No data leaves your machine. Your privacy is baked into the engine.
+                  Fusion processing happens 100% in your browser's private sandbox. No data leaves your machine.
                 </p>
               </div>
             </CardContent>

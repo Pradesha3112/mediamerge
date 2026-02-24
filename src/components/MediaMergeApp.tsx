@@ -6,8 +6,8 @@ import { CombinedOutput } from './CombinedOutput';
 import { AdvancedOptions, type Config } from './AdvancedOptions';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { Layers, Loader2, RotateCcw, Zap, Sparkles, Film, Clock, Music, History, Trash2, Download, Filter, Share2 } from 'lucide-react';
-import { getFileMetadata, loadImage, loadVideo, formatBytes, formatDuration } from '@/lib/media-utils';
+import { Layers, Loader2, RotateCcw, Zap, Music, History, Trash2, Download, Clock, Image as ImageIcon } from 'lucide-react';
+import { loadImage, loadVideo, formatBytes, formatDuration } from '@/lib/media-utils';
 import { saveVideoEntry, getAllVideoEntries, deleteVideoEntry, type VideoHistoryEntry } from '@/lib/video-db';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/hooks/use-toast';
@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { cn } from '@/lib/utils';
 
 const INTRO_DURATION = 4; 
-const MIN_FINAL_DURATION = 120; // 2 minutes
+const EXACT_FINAL_DURATION = 90; // Strictly 1:30
 
 export function MediaMergeApp() {
   const [images, setImages] = useState<File[]>([]);
@@ -77,8 +77,9 @@ export function MediaMergeApp() {
 
     try {
       const audioFile = audios[Math.floor(Math.random() * audios.length)];
-      const primaryImage = images[0];
-      const imgEl = await loadImage(primaryImage);
+      
+      // Load all selected intro images
+      const loadedImages = await Promise.all(images.slice(0, 5).map(img => loadImage(img)));
       const vidEl = await loadVideo(video);
       vidEl.playbackRate = config.playbackSpeed;
       
@@ -89,7 +90,6 @@ export function MediaMergeApp() {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d', { alpha: false })!;
       
-      // Preset Resolution logic
       let width = 1920;
       let height = 1080;
       if (config.preset === 'linkedin') { width = 1080; height = 1350; }
@@ -97,14 +97,13 @@ export function MediaMergeApp() {
       canvas.width = width;
       canvas.height = height;
 
-      const adjustedVideoDuration = vidEl.duration / config.playbackSpeed;
-      const totalRequestedDuration = Math.max(MIN_FINAL_DURATION, INTRO_DURATION + adjustedVideoDuration);
+      const totalRequestedDuration = EXACT_FINAL_DURATION;
       
       const stream = canvas.captureStream(30);
       const audioDest = audioCtx.createMediaStreamDestination();
       const audioSource = audioCtx.createBufferSource();
       audioSource.buffer = decodedAudio;
-      audioSource.loop = true;
+      audioSource.loop = true; // Auto-loop handled here for any audio < 90s
 
       const gainNode = audioCtx.createGain();
       gainNode.gain.value = config.audioVolume;
@@ -142,7 +141,7 @@ export function MediaMergeApp() {
           duration: totalRequestedDuration,
           size: finalBlob.size,
           timestamp: Date.now(),
-          name: `${config.preset.toUpperCase()} Fusion ${new Date().toLocaleTimeString()}`
+          name: `Master 1:30 - ${new Date().toLocaleTimeString()}`
         };
         await saveVideoEntry(entry);
         loadHistory();
@@ -180,34 +179,29 @@ export function MediaMergeApp() {
         applyFilter(ctx);
 
         if (now < INTRO_DURATION) {
-          setProcessingStatus("Rendering 4s Cinematic Intro...");
+          setProcessingStatus("Rendering 4s Intro Sequence...");
+          
+          // Cycle through images if multiple exist
+          const imgIndex = Math.floor((now / INTRO_DURATION) * loadedImages.length);
+          const currentImg = loadedImages[imgIndex];
+          
           let scale = 1.0;
-          if (config.introTransition === 'zoom-in') scale = 1 + (now / INTRO_DURATION) * 0.2;
+          if (config.introTransition === 'zoom-in') scale = 1 + (now / INTRO_DURATION) * 0.1;
           
           const drawW = width * scale;
           const drawH = height * scale;
           const offsetX = (width - drawW) / 2;
           const offsetY = (height - drawH) / 2;
 
-          ctx.drawImage(imgEl, offsetX, offsetY, drawW, drawH);
+          ctx.drawImage(currentImg, offsetX, offsetY, drawW, drawH);
 
-          // Transition to video logic
           if (now > INTRO_DURATION - transitionDuration) {
             const alpha = (now - (INTRO_DURATION - transitionDuration)) / transitionDuration;
-            if (config.transitionPack === 'cinematic') {
-              ctx.globalAlpha = alpha;
-              ctx.drawImage(vidEl, 0, 0, width, height);
-            } else if (config.transitionPack === 'glitch') {
-              const glitchOffset = Math.random() * 20 * alpha;
-              ctx.drawImage(vidEl, glitchOffset, 0, width, height);
-              ctx.globalAlpha = alpha * 0.5;
-            } else {
-              ctx.globalAlpha = alpha;
-              ctx.drawImage(vidEl, 0, 0, width, height);
-            }
+            ctx.globalAlpha = alpha;
+            ctx.drawImage(vidEl, 0, 0, width, height);
           }
         } else {
-          setProcessingStatus(now < MIN_FINAL_DURATION ? "Enforcing 120s Minimum Duration..." : "Finalizing Export...");
+          setProcessingStatus("Stabilizing 1:30 Master Export...");
           ctx.drawImage(vidEl, 0, 0, width, height);
         }
 
@@ -241,7 +235,7 @@ export function MediaMergeApp() {
       render();
     } catch (e) {
       setIsProcessing(false);
-      toast({ variant: "destructive", title: "Fusion Error", description: "Browser processing limit reached." });
+      toast({ variant: "destructive", title: "Fusion Error", description: "Hardware acceleration limit reached." });
     }
   };
 
@@ -265,7 +259,7 @@ export function MediaMergeApp() {
              <ThemeToggle />
              <div className="px-4 py-2 flex items-center gap-2 text-xs font-black bg-primary/10 text-primary rounded-xl border border-primary/20">
                <Clock size={14} />
-               MIN 2:00 OUTPUT
+               EXACT 1:30 OUTPUT
              </div>
           </div>
         </header>
@@ -274,19 +268,33 @@ export function MediaMergeApp() {
           {/* Column 1: Media Inputs */}
           <div className="space-y-6">
             <div className="grid grid-cols-1 gap-6">
-              <UploadCard
-                type="image"
-                title="Banners & Assets"
-                description="4s Intro Frame (Slide 1 used)"
-                accept=".jpg,.jpeg,.png"
-                file={images[0] || null}
-                onUpload={(f) => handleUpload('image', f)}
-                onClear={() => setImages([])}
-              />
+              <div className="space-y-4">
+                <UploadCard
+                  type="image"
+                  title="Banner Assets"
+                  description="Compulsory 4s intro frame(s)"
+                  accept=".jpg,.jpeg,.png"
+                  file={images[images.length - 1] || null}
+                  onUpload={(f) => handleUpload('image', f)}
+                  onClear={() => setImages([])}
+                />
+                {images.length > 0 && (
+                  <div className="flex flex-wrap gap-2 p-4 bg-white/5 rounded-2xl border border-white/5">
+                    {images.map((img, i) => (
+                      <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
+                        <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" />
+                        <Button variant="destructive" size="icon" className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity h-full w-full rounded-none" onClick={() => removeImage(i)}>
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <UploadCard
                 type="video"
                 title="Master Recording"
-                description={`Auto-loops to 2:00 at ${config.playbackSpeed}x`}
+                description={`Auto-loops to hit 1:30 exactly`}
                 accept=".mp4,.webm"
                 file={video}
                 onUpload={(f) => handleUpload('video', f)}
@@ -295,7 +303,7 @@ export function MediaMergeApp() {
             </div>
           </div>
 
-          {/* Column 2: Audio & Controls */}
+          {/* Column 2: Audio Pool */}
           <div className="space-y-6">
             <Card className="glass-card flex flex-col h-full">
               <CardHeader className="pb-4">
@@ -304,26 +312,29 @@ export function MediaMergeApp() {
                   {audios.length > 0 && <Badge variant="secondary">{audios.length} Tracks</Badge>}
                 </div>
                 <CardTitle className="text-xl mt-2">Background Audio Pool</CardTitle>
-                <CardDescription>Randomly picked to match final duration</CardDescription>
+                <CardDescription>Randomly picked and auto-looped to 1:30</CardDescription>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col gap-4">
-                <div className="flex-1 overflow-y-auto max-h-[140px] space-y-2 pr-2 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto max-h-[220px] space-y-2 pr-2 custom-scrollbar">
                   {audios.map((a, i) => (
-                    <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5 group">
-                      <span className="text-xs truncate max-w-[200px] text-muted-foreground font-medium">{a.name}</span>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeAudio(i)}>
-                        <Trash2 size={14} />
+                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 group">
+                      <div className="flex flex-col">
+                        <span className="text-xs truncate max-w-[200px] text-foreground font-medium">{a.name}</span>
+                        <span className="text-[9px] text-muted-foreground font-black uppercase tracking-widest">{formatBytes(a.size)}</span>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeAudio(i)}>
+                        <Trash2 size={16} />
                       </Button>
                     </div>
                   ))}
                   {audios.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-8 text-muted-foreground opacity-50 border-2 border-dashed border-white/5 rounded-2xl">
-                      <Music size={32} className="mb-2" />
+                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground opacity-50 border-2 border-dashed border-white/5 rounded-2xl">
+                      <Music size={40} className="mb-2" />
                       <span className="text-[10px] font-black uppercase tracking-widest">Empty Deck</span>
                     </div>
                   )}
                 </div>
-                <Button variant="outline" className="w-full h-12 border-dashed border-white/10 hover:border-primary/50 text-xs font-bold uppercase tracking-widest" onClick={() => document.getElementById('audio-input')?.click()}>
+                <Button variant="outline" className="w-full h-14 border-dashed border-white/10 hover:border-primary/50 text-xs font-bold uppercase tracking-widest" onClick={() => document.getElementById('audio-input')?.click()}>
                   <input id="audio-input" type="file" accept=".mp3,.wav" className="hidden" onChange={(e) => e.target.files?.[0] && handleUpload('audio', e.target.files[0])} />
                   Add New Audio
                 </Button>
@@ -404,7 +415,7 @@ export function MediaMergeApp() {
           <div className="space-y-8 pt-16 border-t border-white/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-2xl bg-secondary/10 text-secondary shadow-inner"><History size={28} /></div>
+                <div className="p-3 rounded-2xl bg-secondary/10 text-secondary shadow-inner"><Clock size={28} /></div>
                 <h2 className="text-4xl font-black uppercase tracking-tighter">Vault</h2>
               </div>
               <Badge variant="outline" className="border-secondary/30 text-secondary font-black px-4 py-1">
@@ -431,7 +442,7 @@ export function MediaMergeApp() {
                     <div className="flex gap-3">
                       <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-primary bg-white/5 rounded-xl" onClick={() => {
                         const url = URL.createObjectURL(entry.blob);
-                        const a = document.createElement('a'); a.href = url; a.download = `${entry.name}.mp4`; a.click();
+                        const a = document.createElement('a'); a.href = url; a.download = `Fusion_Master_1.30.mp4`; a.click();
                         URL.revokeObjectURL(url);
                       }}>
                         <Download size={16} />
