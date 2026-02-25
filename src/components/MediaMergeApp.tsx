@@ -16,8 +16,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-const END_CARD_DURATION = 4;
 const BANNER_DURATION = 4;
+const END_CARD_DURATION = 4;
 
 function ImageThumbnail({ file, onRemove }: { file: File; onRemove: () => void }) {
   const url = useMemo(() => URL.createObjectURL(file), [file]);
@@ -56,6 +56,7 @@ export function MediaMergeApp() {
     audioFade: true,
     watermark: true,
     watermarkText: 'MediaFusion',
+    thankYouText: '',
     roundedCorners: true,
     vignette: true,
     playbackSpeed: 1, 
@@ -252,10 +253,11 @@ export function MediaMergeApp() {
           ctx.textBaseline = 'middle';
           ctx.fillText('THANK YOU', width / 2, height / 2 - 20);
           
-          // Subtitle
+          // Subtitle (Custom or Fallback to Watermark)
+          const subtitleText = config.thankYouText || config.watermarkText || 'MediaFusion Professional Export';
           ctx.font = '30px Inter, sans-serif';
           ctx.fillStyle = 'rgba(255,255,255,0.6)';
-          ctx.fillText('MediaFusion Professional Export', width / 2, height / 2 + 100);
+          ctx.fillText(subtitleText, width / 2, height / 2 + 100);
           
           // Decorative line
           ctx.fillStyle = 'hsl(var(--primary))';

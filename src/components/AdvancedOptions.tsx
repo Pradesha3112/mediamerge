@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
-import { Settings2, Sparkles, Volume2, Type, Gauge, Filter, Share2, Layers } from 'lucide-react';
+import { Settings2, Filter, Share2, Layers, Type, Volume2, Gauge } from 'lucide-react';
 
 export type Config = {
   introTransition: string;
@@ -19,6 +19,7 @@ export type Config = {
   audioFade: boolean;
   watermark: boolean;
   watermarkText: string;
+  thankYouText: string;
   roundedCorners: boolean;
   vignette: boolean;
   playbackSpeed: number;
@@ -122,7 +123,10 @@ export function AdvancedOptions({ config, onChange }: AdvancedOptionsProps) {
               </SelectContent>
             </Select>
           </div>
+        </div>
 
+        {/* Watermark & End Card Text */}
+        <div className="space-y-4 pb-4 border-b border-white/5">
           <div className="grid gap-2">
             <Label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter">
               <Type size={14} /> Master Watermark
@@ -133,6 +137,19 @@ export function AdvancedOptions({ config, onChange }: AdvancedOptionsProps) {
               placeholder="Studio Branding"
               className="h-10 rounded-xl bg-white/5 border-white/10 text-xs"
             />
+          </div>
+
+          <div className="grid gap-2">
+            <Label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter">
+              <Type size={14} className="text-primary" /> End Card Text
+            </Label>
+            <Input 
+              value={config.thankYouText} 
+              onChange={(e) => update('thankYouText', e.target.value)}
+              placeholder="Custom Thank You Message"
+              className="h-10 rounded-xl bg-white/5 border-white/10 text-xs"
+            />
+            <p className="text-[9px] text-muted-foreground uppercase tracking-widest leading-none">Falls back to watermark if empty</p>
           </div>
         </div>
 
