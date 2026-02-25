@@ -6,7 +6,7 @@ import { CombinedOutput } from './CombinedOutput';
 import { AdvancedOptions, type Config } from './AdvancedOptions';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { Layers, Loader2, RotateCcw, Zap, Music, Clock, Trash2, Library } from 'lucide-react';
+import { Layers, Loader2, RotateCcw, Zap, Music, Clock, Trash2, Library, Download } from 'lucide-react';
 import { loadImage, loadVideo, formatBytes, formatDuration } from '@/lib/media-utils';
 import { 
   saveVideoEntry, 
@@ -123,6 +123,22 @@ export function MediaMergeApp() {
   const removeAudio = async (id: string) => {
     await deleteAudioEntry(id);
     loadAudioPool();
+  };
+
+  const handleHistoryDownload = (entry: VideoHistoryEntry) => {
+    const url = URL.createObjectURL(entry.blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = entry.name.toLowerCase().endsWith('.mp4') ? entry.name : `${entry.name}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Export Retreived",
+      description: "File saved from local vault.",
+    });
   };
 
   const combineMedia = async () => {
@@ -506,6 +522,9 @@ export function MediaMergeApp() {
                   <CardContent className="p-5 pt-0 flex justify-between items-center">
                     <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{formatBytes(entry.size)}</span>
                     <div className="flex gap-3">
+                       <Button variant="ghost" size="icon" className="h-9 w-9 bg-white/5 rounded-xl text-primary hover:text-primary hover:bg-primary/10" onClick={() => handleHistoryDownload(entry)}>
+                        <Download size={16} />
+                      </Button>
                        <Button variant="ghost" size="icon" className="h-9 w-9 bg-white/5 rounded-xl" onClick={() => deleteVideoEntry(entry.id).then(loadHistory)}>
                         <Trash2 size={16} className="text-destructive" />
                       </Button>
