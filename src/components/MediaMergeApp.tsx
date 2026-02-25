@@ -6,9 +6,18 @@ import { CombinedOutput } from './CombinedOutput';
 import { AdvancedOptions, type Config } from './AdvancedOptions';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { Layers, Loader2, RotateCcw, Zap, Music, Clock, Trash2 } from 'lucide-react';
+import { Layers, Loader2, RotateCcw, Zap, Music, Clock, Trash2, Library } from 'lucide-react';
 import { loadImage, loadVideo, formatBytes, formatDuration } from '@/lib/media-utils';
-import { saveVideoEntry, getAllVideoEntries, deleteVideoEntry, type VideoHistoryEntry } from '@/lib/video-db';
+import { 
+  saveVideoEntry, 
+  getAllVideoEntries, 
+  deleteVideoEntry, 
+  saveAudioEntry,
+  getAllAudioEntries,
+  deleteAudioEntry,
+  type VideoHistoryEntry,
+  type AudioPoolEntry
+} from '@/lib/video-db';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
@@ -43,7 +52,7 @@ function ImageThumbnail({ file, onRemove }: { file: File; onRemove: () => void }
 export function MediaMergeApp() {
   const [images, setImages] = useState<File[]>([]);
   const [video, setVideo] = useState<File | null>(null);
-  const [audios, setAudios] = useState<File[]>([]);
+  const [audios, setAudios] = useState<AudioPoolEntry[]>([]);
   const [history, setHistory] = useState<VideoHistoryEntry[]>([]);
   
   const [config, setConfig] = useState<Config>({
@@ -70,6 +79,7 @@ export function MediaMergeApp() {
 
   useEffect(() => {
     loadHistory();
+    loadAudioPool();
   }, []);
 
   const loadHistory = async () => {
@@ -77,7 +87,12 @@ export function MediaMergeApp() {
     setHistory(entries);
   };
 
-  const handleUpload = (type: 'image' | 'video' | 'audio', input: File | File[]) => {
+  const loadAudioPool = async () => {
+    const entries = await getAllAudioEntries();
+    setAudios(entries);
+  };
+
+  const handleUpload = async (type: 'image' | 'video' | 'audio', input: File | File[]) => {
     const files = Array.isArray(input) ? input : [input];
     
     if (type === 'image') {
@@ -90,8 +105,24 @@ export function MediaMergeApp() {
     }
     if (type === 'video') setVideo(files[0]);
     if (type === 'audio') {
-      setAudios(prev => [...prev, ...files]);
+      for (const file of files) {
+        const entry: AudioPoolEntry = {
+          id: `audio-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          file,
+          name: file.name,
+          size: file.size,
+          timestamp: Date.now()
+        };
+        await saveAudioEntry(entry);
+      }
+      loadAudioPool();
+      toast({ title: "Audio Pool Updated", description: `${files.length} track(s) added to permanent library.` });
     }
+  };
+
+  const removeAudio = async (id: string) => {
+    await deleteAudioEntry(id);
+    loadAudioPool();
   };
 
   const combineMedia = async () => {
@@ -102,7 +133,8 @@ export function MediaMergeApp() {
     setProcessingStatus("Calibrating Media Engine...");
 
     try {
-      const audioFile = audios[Math.floor(Math.random() * audios.length)];
+      const audioEntry = audios[Math.floor(Math.random() * audios.length)];
+      const audioFile = audioEntry.file;
       const loadedImages = await Promise.all(images.map(img => loadImage(img)));
       const vidEl = await loadVideo(video);
       
@@ -299,7 +331,6 @@ export function MediaMergeApp() {
   };
 
   const removeImage = (index: number) => setImages(prev => prev.filter((_, i) => i !== index));
-  const removeAudio = (index: number) => setAudios(prev => prev.filter((_, i) => i !== index));
 
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8 transition-colors duration-500">
@@ -358,29 +389,41 @@ export function MediaMergeApp() {
             <Card className="glass-card flex flex-col h-full">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
-                  <div className="p-2 rounded-lg bg-primary/10 text-primary"><Music size={20} /></div>
-                  {audios.length > 0 && <Badge variant="secondary">{audios.length} Tracks</Badge>}
+                  <div className="p-2 rounded-lg bg-primary/10 text-primary"><Library size={20} /></div>
+                  {audios.length > 0 && <Badge variant="secondary">{audios.length} Tracks In Library</Badge>}
                 </div>
-                <CardTitle className="text-xl mt-2">Background Audio Pool</CardTitle>
-                <CardDescription>Randomly selected. Loops if needed.</CardDescription>
+                <CardTitle className="text-xl mt-2">Permanent Audio Library</CardTitle>
+                <CardDescription>Saved in browser. Randomly chosen for fusion.</CardDescription>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col gap-4">
                 <div className="flex-1 overflow-y-auto max-h-[300px] space-y-2 pr-2 custom-scrollbar">
-                  {audios.map((a, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 group">
-                      <div className="flex flex-col">
-                        <span className="text-xs truncate max-w-[200px] font-medium">{a.name}</span>
-                        <span className="text-[9px] text-muted-foreground font-black uppercase tracking-widest">{formatBytes(a.size)}</span>
-                      </div>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeAudio(i)}>
-                        <Trash2 size={16} />
-                      </Button>
+                  {audios.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-muted-foreground border-2 border-dashed border-white/5 rounded-2xl">
+                       <Music size={32} className="mb-2 opacity-20" />
+                       <span className="text-xs uppercase font-black tracking-widest">Library Empty</span>
                     </div>
-                  ))}
+                  ) : (
+                    audios.map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 group hover:border-primary/30 transition-colors">
+                        <div className="flex flex-col min-w-0 flex-1 mr-4">
+                          <span className="text-xs truncate font-medium">{entry.name}</span>
+                          <span className="text-[9px] text-muted-foreground font-black uppercase tracking-widest">{formatBytes(entry.size)} • {new Date(entry.timestamp).toLocaleDateString()}</span>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0" 
+                          onClick={() => removeAudio(entry.id)}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    ))
+                  )}
                 </div>
                 <Button variant="outline" className="w-full h-14 border-dashed border-white/10 hover:border-primary/50 text-xs font-bold uppercase tracking-widest" onClick={() => document.getElementById('audio-input')?.click()}>
                   <input id="audio-input" type="file" multiple accept=".mp3,.wav" className="hidden" onChange={(e) => e.target.files && handleUpload('audio', Array.from(e.target.files))} />
-                  Add To Pool
+                  Add To Library
                 </Button>
               </CardContent>
             </Card>
