@@ -6,7 +6,7 @@ import { CombinedOutput } from './CombinedOutput';
 import { AdvancedOptions, type Config } from './AdvancedOptions';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { Layers, Loader2, RotateCcw, Zap, Music, Clock, Trash2, Download } from 'lucide-react';
+import { Layers, Loader2, RotateCcw, Zap, Music, Clock, Trash2 } from 'lucide-react';
 import { loadImage, loadVideo, formatBytes, formatDuration } from '@/lib/media-utils';
 import { saveVideoEntry, getAllVideoEntries, deleteVideoEntry, type VideoHistoryEntry } from '@/lib/video-db';
 import { Toaster } from '@/components/ui/toaster';
@@ -109,7 +109,6 @@ export function MediaMergeApp() {
       const effectiveRecordingDuration = vidEl.duration / config.playbackSpeed;
       const totalRequestedDuration = introPhaseTotal + effectiveRecordingDuration + END_CARD_DURATION;
 
-      // Use chosen playback rate
       vidEl.playbackRate = config.playbackSpeed;
       
       const audioBuffer = await audioFile.arrayBuffer();
@@ -174,10 +173,10 @@ export function MediaMergeApp() {
         loadHistory();
         setIsProcessing(false);
 
-        // RESET Workspace
+        // Auto-Reset Workspace
         setImages([]);
         setVideo(null);
-        toast({ title: "Fusion Complete", description: `Final duration: ${formatDuration(totalRequestedDuration)}.` });
+        toast({ title: "Fusion Complete", description: `Exported: ${formatDuration(totalRequestedDuration)}.` });
       };
 
       recorder.start();
@@ -210,6 +209,7 @@ export function MediaMergeApp() {
         applyFilter(ctx);
 
         if (now < introPhaseTotal) {
+          // PHASE 1: BANNER SEQUENCE (4s each)
           const imgIndex = Math.floor(now / BANNER_DURATION);
           const currentImg = loadedImages[imgIndex];
           const nextImgIndex = imgIndex + 1;
@@ -227,7 +227,6 @@ export function MediaMergeApp() {
 
           ctx.drawImage(currentImg, offsetX, offsetY, drawW, drawH);
 
-          // Transition to next banner or recording
           if (imageLocalTime > (BANNER_DURATION - crossfadeDuration)) {
             const alpha = (imageLocalTime - (BANNER_DURATION - crossfadeDuration)) / crossfadeDuration;
             ctx.globalAlpha = alpha;
@@ -239,18 +238,28 @@ export function MediaMergeApp() {
             ctx.globalAlpha = 1.0;
           }
         } else if (now < totalRequestedDuration - END_CARD_DURATION) {
+          // PHASE 2: MASTER RECORDING
           ctx.drawImage(vidEl, 0, 0, width, height);
         } else {
+          // PHASE 3: AUTOMATIC THANK YOU END CARD (4s)
           ctx.fillStyle = '#000';
           ctx.fillRect(0, 0, width, height);
-          ctx.font = 'bold 80px Inter, sans-serif';
+          
+          // Cinematic "THANK YOU"
+          ctx.font = 'bold 120px Inter, sans-serif';
           ctx.fillStyle = 'white';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('THANK YOU', width / 2, height / 2);
+          ctx.fillText('THANK YOU', width / 2, height / 2 - 20);
+          
+          // Subtitle
           ctx.font = '30px Inter, sans-serif';
-          ctx.fillStyle = 'rgba(255,255,255,0.7)';
-          ctx.fillText('MediaFusion Professional Export', width / 2, height / 2 + 80);
+          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.fillText('MediaFusion Professional Export', width / 2, height / 2 + 100);
+          
+          // Decorative line
+          ctx.fillStyle = 'hsl(var(--primary))';
+          ctx.fillRect(width / 2 - 100, height / 2 + 50, 200, 4);
         }
 
         ctx.restore();
@@ -265,7 +274,7 @@ export function MediaMergeApp() {
 
         if (config.watermark) {
           ctx.font = 'bold 32px Inter, sans-serif';
-          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.fillStyle = 'rgba(255,255,255,0.4)';
           ctx.textAlign = 'right';
           ctx.fillText(config.watermarkText, width - 60, height - 60);
         }
@@ -317,7 +326,7 @@ export function MediaMergeApp() {
               <UploadCard
                 type="image"
                 title="Banner Assets"
-                description="4s each sequence. Compulsory."
+                description="4s each in sequence. At least 1 required."
                 accept=".jpg,.jpeg,.png"
                 multiple
                 file={images.length > 0 ? images[images.length - 1] : null}
@@ -412,6 +421,9 @@ export function MediaMergeApp() {
                   <Zap className="mr-5" size={48} fill="currentColor" />
                   FUSE NOW
                 </Button>
+                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">
+                  Includes Automatic {END_CARD_DURATION}s End Card
+                </div>
               </div>
             )}
           </div>
