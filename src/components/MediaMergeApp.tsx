@@ -230,10 +230,9 @@ export function MediaMergeApp() {
 
       recorder.start();
       audioSource.start(0);
-      vidEl.play();
-
+      
       const startTime = performance.now();
-      const crossfadeDuration = 0.8;
+      const crossfadeDuration = 0.5;
       
       const applyFilter = (ctx: CanvasRenderingContext2D) => {
         switch(config.filter) {
@@ -276,21 +275,30 @@ export function MediaMergeApp() {
 
           ctx.drawImage(currentImg, offsetX, offsetY, drawW, drawH);
 
+          // Transition to next banner or recording
           if (imageLocalTime > (BANNER_DURATION - crossfadeDuration)) {
             const alpha = (imageLocalTime - (BANNER_DURATION - crossfadeDuration)) / crossfadeDuration;
             ctx.globalAlpha = alpha;
             if (nextImgIndex < loadedImages.length) {
               ctx.drawImage(loadedImages[nextImgIndex], 0, 0, width, height);
             } else {
+              // Transitioning to recording
               ctx.drawImage(vidEl, 0, 0, width, height);
             }
             ctx.globalAlpha = 1.0;
           }
-        } else if (now < totalRequestedDuration - END_CARD_DURATION) {
+
+          // Ensure video is paused or prepared
+          if (vidEl.currentTime > 0) vidEl.currentTime = 0;
+          if (!vidEl.paused) vidEl.pause();
+
+        } else if (now < introPhaseTotal + effectiveRecordingDuration) {
           // PHASE 2: MASTER RECORDING
+          if (vidEl.paused) vidEl.play();
           ctx.drawImage(vidEl, 0, 0, width, height);
         } else {
           // PHASE 3: AUTOMATIC THANK YOU END CARD (4s)
+          if (!vidEl.paused) vidEl.pause();
           ctx.fillStyle = '#000';
           ctx.fillRect(0, 0, width, height);
           
