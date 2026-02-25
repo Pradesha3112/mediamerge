@@ -6,7 +6,7 @@ import { CombinedOutput } from './CombinedOutput';
 import { AdvancedOptions, type Config } from './AdvancedOptions';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { Layers, Loader2, RotateCcw, Zap, Music, Clock, Trash2, Download, Image as ImageIcon } from 'lucide-react';
+import { Layers, Loader2, RotateCcw, Zap, Music, Clock, Trash2, Download } from 'lucide-react';
 import { loadImage, loadVideo, formatBytes, formatDuration } from '@/lib/media-utils';
 import { saveVideoEntry, getAllVideoEntries, deleteVideoEntry, type VideoHistoryEntry } from '@/lib/video-db';
 import { Toaster } from '@/components/ui/toaster';
@@ -80,18 +80,16 @@ export function MediaMergeApp() {
     const files = Array.isArray(input) ? input : [input];
     
     if (type === 'image') {
-      // Limit to a reasonable number of intro images to prevent the video phase from disappearing
       if (images.length + files.length > 15) {
         toast({ variant: "destructive", title: "Limit Reached", description: "Maximum 15 intro images allowed to maintain video length." });
         return;
       }
       setImages(prev => [...prev, ...files]);
-      toast({ title: "Banner Assets Added", description: `${files.length} image(s) added to pool.` });
+      toast({ title: "Banner Assets Added", description: `${files.length} image(s) added.` });
     }
     if (type === 'video') setVideo(files[0]);
     if (type === 'audio') {
       setAudios(prev => [...prev, ...files]);
-      toast({ title: "Audio Pool Updated", description: `${files.length} track(s) added.` });
     }
   };
 
@@ -111,11 +109,12 @@ export function MediaMergeApp() {
       const videoPhaseDuration = EXACT_FINAL_DURATION - introPhaseTotal - END_CARD_DURATION;
 
       if (videoPhaseDuration <= 0) {
-        throw new Error("Too many images. Intro duration exceeds total video length.");
+        throw new Error("Too many images. Intro duration exceeds 90s limit.");
       }
 
-      const normalizedPlaybackRate = vidEl.duration / videoPhaseDuration;
-      vidEl.playbackRate = normalizedPlaybackRate;
+      // SMART NORMALIZER: Adjust playback rate to fit the remaining window
+      const normalizedPlaybackRate = vidEl.duration / (videoPhaseDuration / config.playbackSpeed);
+      vidEl.playbackRate = Math.min(Math.max(normalizedPlaybackRate, 0.1), 16); 
       
       const audioBuffer = await audioFile.arrayBuffer();
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -174,16 +173,16 @@ export function MediaMergeApp() {
           duration: totalRequestedDuration,
           size: finalBlob.size,
           timestamp: Date.now(),
-          name: `Master 1:30 - ${new Date().toLocaleTimeString()}`
+          name: `Fusion Master 1:30 - ${new Date().toLocaleTimeString()}`
         };
         await saveVideoEntry(entry);
         loadHistory();
         setIsProcessing(false);
 
-        // AUTO-RESET Input Section after successful generation
+        // AUTO-RESET Workspace after success
         setImages([]);
         setVideo(null);
-        toast({ title: "Workspace Reset", description: "Banner and Video inputs cleared for your next project." });
+        toast({ title: "Fusion Complete", description: "Inputs cleared. Result saved to vault." });
       };
 
       recorder.start();
@@ -216,10 +215,9 @@ export function MediaMergeApp() {
         applyFilter(ctx);
 
         if (now < introPhaseTotal) {
-          setProcessingStatus(`Rendering Banners (${Math.floor(now/4) + 1}/${loadedImages.length})...`);
-          
           const imgIndex = Math.floor(now / 4);
           const currentImg = loadedImages[imgIndex];
+          const nextImgIndex = imgIndex + 1;
           const imageLocalTime = now % 4;
           
           let scale = 1.0;
@@ -234,26 +232,27 @@ export function MediaMergeApp() {
 
           ctx.drawImage(currentImg, offsetX, offsetY, drawW, drawH);
 
-          // Handle transition to next image OR to video
-          if (now > introPhaseTotal - crossfadeDuration) {
-            const alpha = (now - (introPhaseTotal - crossfadeDuration)) / crossfadeDuration;
+          // Handle transitions between images or to the recording
+          if (imageLocalTime > (4 - crossfadeDuration)) {
+            const alpha = (imageLocalTime - (4 - crossfadeDuration)) / crossfadeDuration;
             ctx.globalAlpha = alpha;
-            ctx.drawImage(vidEl, 0, 0, width, height);
+            if (nextImgIndex < loadedImages.length) {
+              ctx.drawImage(loadedImages[nextImgIndex], 0, 0, width, height);
+            } else {
+              ctx.drawImage(vidEl, 0, 0, width, height);
+            }
+            ctx.globalAlpha = 1.0;
           }
         } else if (now < EXACT_FINAL_DURATION - END_CARD_DURATION) {
-          setProcessingStatus("Normalizer: Syncing Content...");
           ctx.drawImage(vidEl, 0, 0, width, height);
         } else {
-          setProcessingStatus("Generating Outro...");
           ctx.fillStyle = '#000';
           ctx.fillRect(0, 0, width, height);
-          
           ctx.font = 'bold 80px Inter, sans-serif';
           ctx.fillStyle = 'white';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText('THANK YOU', width / 2, height / 2);
-          
           ctx.font = '30px Inter, sans-serif';
           ctx.fillStyle = 'rgba(255,255,255,0.7)';
           ctx.fillText('MediaFusion Master Export', width / 2, height / 2 + 80);
@@ -289,7 +288,7 @@ export function MediaMergeApp() {
       render();
     } catch (e: any) {
       setIsProcessing(false);
-      toast({ variant: "destructive", title: "Fusion Error", description: e.message || "Hardware acceleration limit reached." });
+      toast({ variant: "destructive", title: "Fusion Error", description: e.message });
     }
   };
 
@@ -299,7 +298,6 @@ export function MediaMergeApp() {
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8 transition-colors duration-500">
       <div className="max-w-7xl mx-auto space-y-10">
-        {/* Header */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-white/5 pb-8">
           <div className="flex-1">
             <h1 className="text-4xl sm:text-5xl font-black tracking-tight">
@@ -319,41 +317,37 @@ export function MediaMergeApp() {
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Column 1: Media Inputs */}
           <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-6">
-              <div className="space-y-4">
-                <UploadCard
-                  type="image"
-                  title="Banner Assets"
-                  description="Each banner plays for 4s. At least one required."
-                  accept=".jpg,.jpeg,.png"
-                  multiple
-                  file={images.length > 0 ? images[images.length - 1] : null}
-                  onUpload={(f) => handleUpload('image', f)}
-                  onClear={() => setImages([])}
-                />
-                {images.length > 0 && (
-                  <div className="flex flex-wrap gap-2 p-4 bg-white/5 rounded-2xl border border-white/5">
-                    {images.map((img, i) => (
-                      <ImageThumbnail key={`${img.name}-${i}`} file={img} onRemove={() => removeImage(i)} />
-                    ))}
-                  </div>
-                )}
-              </div>
+            <div className="space-y-4">
               <UploadCard
-                type="video"
-                title="Master Recording"
-                description={`Smart Normalized to hit exactly 1:30 total.`}
-                accept=".mp4,.webm"
-                file={video}
-                onUpload={(f) => handleUpload('video', f)}
-                onClear={() => setVideo(null)}
+                type="image"
+                title="Banner Assets"
+                description="4s each. At least one required."
+                accept=".jpg,.jpeg,.png"
+                multiple
+                file={images.length > 0 ? images[images.length - 1] : null}
+                onUpload={(f) => handleUpload('image', f)}
+                onClear={() => setImages([])}
               />
+              {images.length > 0 && (
+                <div className="flex flex-wrap gap-2 p-4 bg-white/5 rounded-2xl border border-white/5">
+                  {images.map((img, i) => (
+                    <ImageThumbnail key={`${img.name}-${i}`} file={img} onRemove={() => removeImage(i)} />
+                  ))}
+                </div>
+              )}
             </div>
+            <UploadCard
+              type="video"
+              title="Master Recording"
+              description="Smart Normalized to fit strictly into the timeline."
+              accept=".mp4,.webm"
+              file={video}
+              onUpload={(f) => handleUpload('video', f)}
+              onClear={() => setVideo(null)}
+            />
           </div>
 
-          {/* Column 2: Audio Pool */}
           <div className="space-y-6">
             <Card className="glass-card flex flex-col h-full">
               <CardHeader className="pb-4">
@@ -362,14 +356,14 @@ export function MediaMergeApp() {
                   {audios.length > 0 && <Badge variant="secondary">{audios.length} Tracks</Badge>}
                 </div>
                 <CardTitle className="text-xl mt-2">Background Audio Pool</CardTitle>
-                <CardDescription>Randomly picked and auto-looped to 1:30.</CardDescription>
+                <CardDescription>Randomly selected for each fusion.</CardDescription>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col gap-4">
                 <div className="flex-1 overflow-y-auto max-h-[300px] space-y-2 pr-2 custom-scrollbar">
                   {audios.map((a, i) => (
                     <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 group">
                       <div className="flex flex-col">
-                        <span className="text-xs truncate max-w-[200px] text-foreground font-medium">{a.name}</span>
+                        <span className="text-xs truncate max-w-[200px] font-medium">{a.name}</span>
                         <span className="text-[9px] text-muted-foreground font-black uppercase tracking-widest">{formatBytes(a.size)}</span>
                       </div>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeAudio(i)}>
@@ -377,12 +371,6 @@ export function MediaMergeApp() {
                       </Button>
                     </div>
                   ))}
-                  {audios.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground opacity-50 border-2 border-dashed border-white/5 rounded-2xl">
-                      <Music size={40} className="mb-2" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Empty Deck</span>
-                    </div>
-                  )}
                 </div>
                 <Button variant="outline" className="w-full h-14 border-dashed border-white/10 hover:border-primary/50 text-xs font-bold uppercase tracking-widest" onClick={() => document.getElementById('audio-input')?.click()}>
                   <input id="audio-input" type="file" multiple accept=".mp3,.wav" className="hidden" onChange={(e) => e.target.files && handleUpload('audio', Array.from(e.target.files))} />
@@ -393,7 +381,6 @@ export function MediaMergeApp() {
           </div>
         </div>
 
-        {/* Editing & Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 pt-6">
           <div className="lg:col-span-1">
              <AdvancedOptions config={config} onChange={setConfig} />
@@ -403,14 +390,11 @@ export function MediaMergeApp() {
             {isProcessing ? (
               <div className="w-full max-w-2xl space-y-8 text-center bg-card/40 p-10 rounded-[2.5rem] border border-white/5 backdrop-blur-3xl">
                 <div className="flex flex-col items-center gap-6">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full animate-pulse" />
-                    <Loader2 className="animate-spin text-primary relative" size={80} />
-                  </div>
+                  <Loader2 className="animate-spin text-primary" size={80} />
                   <span className="text-3xl font-black text-primary tracking-tight neon-glow uppercase">{processingStatus}</span>
                 </div>
                 <div className="space-y-4">
-                  <Progress value={progress} className="h-4 w-full bg-primary/10 border border-primary/20" />
+                  <Progress value={progress} className="h-4 w-full" />
                   <div className="flex justify-between text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
                     <span>Local Compositing</span>
                     <span>{Math.round(progress)}% Ready</span>
@@ -426,30 +410,18 @@ export function MediaMergeApp() {
                   className={cn(
                     "h-28 px-24 text-4xl font-black rounded-[2.5rem] transition-all duration-500 shadow-2xl uppercase tracking-tighter",
                     (images.length > 0 && video && audios.length > 0)
-                      ? "bg-primary hover:bg-primary/90 text-white shadow-primary/40 scale-105 active:scale-95 animate-pulse-subtle" 
+                      ? "bg-primary hover:bg-primary/90 text-white shadow-primary/40 scale-105 active:scale-95" 
                       : "bg-muted text-muted-foreground opacity-30 cursor-not-allowed"
                   )}
                 >
                   <Zap className="mr-5" size={48} fill="currentColor" />
                   FUSE NOW
                 </Button>
-                
-                {(images.length > 0 || video || audios.length > 0) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { setImages([]); setVideo(null); setAudios([]); setProgress(0); setFinalVideoBlob(null); }}
-                    className="text-muted-foreground hover:text-destructive font-black uppercase tracking-widest text-[11px]"
-                  >
-                    <RotateCcw className="mr-2" size={14} /> Purge Studio
-                  </Button>
-                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* Final Output */}
         {finalVideoBlob && !isProcessing && (
           <div className="pt-12 animate-in zoom-in-95 duration-700">
             <CombinedOutput 
@@ -460,14 +432,10 @@ export function MediaMergeApp() {
           </div>
         )}
 
-        {/* History Vault */}
         {history.length > 0 && (
           <div className="space-y-8 pt-16 border-t border-white/5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-2xl bg-secondary/10 text-secondary shadow-inner"><Clock size={28} /></div>
-                <h2 className="text-4xl font-black uppercase tracking-tighter">Vault</h2>
-              </div>
+              <h2 className="text-4xl font-black uppercase tracking-tighter">Vault</h2>
               <Badge variant="outline" className="border-secondary/30 text-secondary font-black px-4 py-1">
                 {history.length} MASTERS SAVED
               </Badge>
@@ -477,11 +445,7 @@ export function MediaMergeApp() {
               {history.map((entry) => (
                 <Card key={entry.id} className="glass-card overflow-hidden group hover:border-secondary/50 transition-all border-white/5">
                   <div className="aspect-video relative overflow-hidden bg-black">
-                    <img src={entry.thumbnail} className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-1000" alt="Master Thumb" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-                    <div className="absolute bottom-4 left-4 font-black text-white text-[11px] uppercase tracking-widest bg-primary/20 px-3 py-1 rounded-full backdrop-blur-md">
-                      {formatDuration(entry.duration)}
-                    </div>
+                    <img src={entry.thumbnail} className="w-full h-full object-cover opacity-80" alt="Master Thumb" />
                   </div>
                   <CardHeader className="p-5 pb-2">
                     <CardTitle className="text-base truncate font-black uppercase tracking-tight">{entry.name}</CardTitle>
@@ -490,15 +454,8 @@ export function MediaMergeApp() {
                   <CardContent className="p-5 pt-0 flex justify-between items-center">
                     <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{formatBytes(entry.size)}</span>
                     <div className="flex gap-3">
-                      <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-primary bg-white/5 rounded-xl" onClick={() => {
-                        const url = URL.createObjectURL(entry.blob);
-                        const a = document.createElement('a'); a.href = url; a.download = `Fusion_Master_1.30.mp4`; a.click();
-                        URL.revokeObjectURL(url);
-                      }}>
-                        <Download size={16} />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive bg-white/5 rounded-xl" onClick={() => { deleteVideoEntry(entry.id); loadHistory(); }}>
-                        <Trash2 size={16} />
+                       <Button variant="ghost" size="icon" className="h-9 w-9 bg-white/5 rounded-xl" onClick={() => deleteVideoEntry(entry.id).then(loadHistory)}>
+                        <Trash2 size={16} className="text-destructive" />
                       </Button>
                     </div>
                   </CardContent>
