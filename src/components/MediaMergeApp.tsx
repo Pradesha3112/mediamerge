@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { cn } from '@/lib/utils';
 
 const END_CARD_DURATION = 4;
-const EXACT_FINAL_DURATION = 90; // Strictly 1:30 (90 seconds)
+const BANNER_DURATION = 4;
 
 function ImageThumbnail({ file, onRemove }: { file: File; onRemove: () => void }) {
   const url = useMemo(() => URL.createObjectURL(file), [file]);
@@ -81,7 +81,7 @@ export function MediaMergeApp() {
     
     if (type === 'image') {
       if (images.length + files.length > 15) {
-        toast({ variant: "destructive", title: "Limit Reached", description: "Maximum 15 intro images allowed to maintain video length." });
+        toast({ variant: "destructive", title: "Limit Reached", description: "Maximum 15 intro images allowed." });
         return;
       }
       setImages(prev => [...prev, ...files]);
@@ -98,23 +98,19 @@ export function MediaMergeApp() {
 
     setIsProcessing(true);
     setProgress(0);
-    setProcessingStatus("Calibrating Smart Normalizer...");
+    setProcessingStatus("Calibrating Media Engine...");
 
     try {
       const audioFile = audios[Math.floor(Math.random() * audios.length)];
       const loadedImages = await Promise.all(images.map(img => loadImage(img)));
       const vidEl = await loadVideo(video);
       
-      const introPhaseTotal = images.length * 4;
-      const videoPhaseDuration = EXACT_FINAL_DURATION - introPhaseTotal - END_CARD_DURATION;
+      const introPhaseTotal = images.length * BANNER_DURATION;
+      const effectiveRecordingDuration = vidEl.duration / config.playbackSpeed;
+      const totalRequestedDuration = introPhaseTotal + effectiveRecordingDuration + END_CARD_DURATION;
 
-      if (videoPhaseDuration <= 0) {
-        throw new Error("Too many images. Intro duration exceeds 90s limit.");
-      }
-
-      // SMART NORMALIZER: Adjust playback rate to fit the remaining window
-      const normalizedPlaybackRate = vidEl.duration / (videoPhaseDuration / config.playbackSpeed);
-      vidEl.playbackRate = Math.min(Math.max(normalizedPlaybackRate, 0.1), 16); 
+      // Use chosen playback rate
+      vidEl.playbackRate = config.playbackSpeed;
       
       const audioBuffer = await audioFile.arrayBuffer();
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -130,7 +126,6 @@ export function MediaMergeApp() {
       canvas.width = width;
       canvas.height = height;
 
-      const totalRequestedDuration = EXACT_FINAL_DURATION;
       const stream = canvas.captureStream(30);
       const audioDest = audioCtx.createMediaStreamDestination();
       const audioSource = audioCtx.createBufferSource();
@@ -173,16 +168,16 @@ export function MediaMergeApp() {
           duration: totalRequestedDuration,
           size: finalBlob.size,
           timestamp: Date.now(),
-          name: `Fusion Master 1:30 - ${new Date().toLocaleTimeString()}`
+          name: `Fusion Export - ${new Date().toLocaleTimeString()} (${formatDuration(totalRequestedDuration)})`
         };
         await saveVideoEntry(entry);
         loadHistory();
         setIsProcessing(false);
 
-        // AUTO-RESET Workspace after success
+        // RESET Workspace
         setImages([]);
         setVideo(null);
-        toast({ title: "Fusion Complete", description: "Inputs cleared. Result saved to vault." });
+        toast({ title: "Fusion Complete", description: `Final duration: ${formatDuration(totalRequestedDuration)}.` });
       };
 
       recorder.start();
@@ -215,14 +210,14 @@ export function MediaMergeApp() {
         applyFilter(ctx);
 
         if (now < introPhaseTotal) {
-          const imgIndex = Math.floor(now / 4);
+          const imgIndex = Math.floor(now / BANNER_DURATION);
           const currentImg = loadedImages[imgIndex];
           const nextImgIndex = imgIndex + 1;
-          const imageLocalTime = now % 4;
+          const imageLocalTime = now % BANNER_DURATION;
           
           let scale = 1.0;
           if (config.introTransition === 'zoom-in') {
-            scale = 1 + (imageLocalTime / 4) * 0.05;
+            scale = 1 + (imageLocalTime / BANNER_DURATION) * 0.05;
           }
           
           const drawW = width * scale;
@@ -232,9 +227,9 @@ export function MediaMergeApp() {
 
           ctx.drawImage(currentImg, offsetX, offsetY, drawW, drawH);
 
-          // Handle transitions between images or to the recording
-          if (imageLocalTime > (4 - crossfadeDuration)) {
-            const alpha = (imageLocalTime - (4 - crossfadeDuration)) / crossfadeDuration;
+          // Transition to next banner or recording
+          if (imageLocalTime > (BANNER_DURATION - crossfadeDuration)) {
+            const alpha = (imageLocalTime - (BANNER_DURATION - crossfadeDuration)) / crossfadeDuration;
             ctx.globalAlpha = alpha;
             if (nextImgIndex < loadedImages.length) {
               ctx.drawImage(loadedImages[nextImgIndex], 0, 0, width, height);
@@ -243,7 +238,7 @@ export function MediaMergeApp() {
             }
             ctx.globalAlpha = 1.0;
           }
-        } else if (now < EXACT_FINAL_DURATION - END_CARD_DURATION) {
+        } else if (now < totalRequestedDuration - END_CARD_DURATION) {
           ctx.drawImage(vidEl, 0, 0, width, height);
         } else {
           ctx.fillStyle = '#000';
@@ -255,7 +250,7 @@ export function MediaMergeApp() {
           ctx.fillText('THANK YOU', width / 2, height / 2);
           ctx.font = '30px Inter, sans-serif';
           ctx.fillStyle = 'rgba(255,255,255,0.7)';
-          ctx.fillText('MediaFusion Master Export', width / 2, height / 2 + 80);
+          ctx.fillText('MediaFusion Professional Export', width / 2, height / 2 + 80);
         }
 
         ctx.restore();
@@ -311,7 +306,7 @@ export function MediaMergeApp() {
              <ThemeToggle />
              <div className="px-4 py-2 flex items-center gap-2 text-xs font-black bg-primary/10 text-primary rounded-xl border border-primary/20">
                <Clock size={14} />
-               EXACT 1:30 OUTPUT
+               DYNAMIC EXPORT
              </div>
           </div>
         </header>
@@ -322,7 +317,7 @@ export function MediaMergeApp() {
               <UploadCard
                 type="image"
                 title="Banner Assets"
-                description="4s each. At least one required."
+                description="4s each sequence. Compulsory."
                 accept=".jpg,.jpeg,.png"
                 multiple
                 file={images.length > 0 ? images[images.length - 1] : null}
@@ -340,7 +335,7 @@ export function MediaMergeApp() {
             <UploadCard
               type="video"
               title="Master Recording"
-              description="Smart Normalized to fit strictly into the timeline."
+              description="Original format playback with speed control."
               accept=".mp4,.webm"
               file={video}
               onUpload={(f) => handleUpload('video', f)}
@@ -356,7 +351,7 @@ export function MediaMergeApp() {
                   {audios.length > 0 && <Badge variant="secondary">{audios.length} Tracks</Badge>}
                 </div>
                 <CardTitle className="text-xl mt-2">Background Audio Pool</CardTitle>
-                <CardDescription>Randomly selected for each fusion.</CardDescription>
+                <CardDescription>Randomly selected. Loops if needed.</CardDescription>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col gap-4">
                 <div className="flex-1 overflow-y-auto max-h-[300px] space-y-2 pr-2 custom-scrollbar">
@@ -396,7 +391,7 @@ export function MediaMergeApp() {
                 <div className="space-y-4">
                   <Progress value={progress} className="h-4 w-full" />
                   <div className="flex justify-between text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
-                    <span>Local Compositing</span>
+                    <span>Local Rendering</span>
                     <span>{Math.round(progress)}% Ready</span>
                   </div>
                 </div>

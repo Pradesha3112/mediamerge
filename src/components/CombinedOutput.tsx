@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Download, CheckCircle, FileVideo, HardDrive, RotateCcw, Loader2, PlayCircle, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { formatBytes } from '@/lib/media-utils';
+import { formatBytes, formatDuration } from '@/lib/media-utils';
 
 interface CombinedOutputProps {
   blob: Blob;
@@ -16,12 +16,20 @@ interface CombinedOutputProps {
 
 export function CombinedOutput({ blob, image, onReset }: CombinedOutputProps) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [duration, setDuration] = useState<number | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     setVideoUrl(url);
+
+    const tempVideo = document.createElement('video');
+    tempVideo.src = url;
+    tempVideo.onloadedmetadata = () => {
+      setDuration(tempVideo.duration);
+    };
+
     return () => {
       if (url) URL.revokeObjectURL(url);
     };
@@ -31,14 +39,14 @@ export function CombinedOutput({ blob, image, onReset }: CombinedOutputProps) {
     if (!videoUrl) return;
     const a = document.createElement('a');
     a.href = videoUrl;
-    a.download = `MediaFusion_Master_1.30.mp4`;
+    a.download = `MediaFusion_Export_${Date.now()}.mp4`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     
     toast({
       title: "Export Success",
-      description: "Strict 1:30 master file saved to your device.",
+      description: "Master file saved to your device.",
     });
   };
 
@@ -67,9 +75,11 @@ export function CombinedOutput({ blob, image, onReset }: CombinedOutputProps) {
                 <Badge variant="outline" className="border-primary/30 text-primary">
                   1080p Export
                 </Badge>
-                <Badge variant="secondary">
-                  Duration: 1:30 (Exact)
-                </Badge>
+                {duration && (
+                  <Badge variant="secondary">
+                    Duration: {formatDuration(duration)}
+                  </Badge>
+                )}
               </div>
             </div>
           </CardHeader>
@@ -119,7 +129,7 @@ export function CombinedOutput({ blob, image, onReset }: CombinedOutputProps) {
               <div className="grid gap-2">
                 {[
                   { label: "Container", value: "MP4 (H.264/AAC)" },
-                  { label: "Exact Duration", value: "90.00 Seconds" },
+                  { label: "Duration", value: duration ? formatDuration(duration) : "Calculating..." },
                   { label: "Bitrate", value: "8.0 Mbps (Target)" },
                   { label: "Frame Rate", value: "30 FPS" }
                 ].map((spec, i) => (
